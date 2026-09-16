@@ -75,6 +75,8 @@ export interface UserProfile {
   notesRead?: number;
   registeredAt?: string;
   isRegistered?: boolean;
+  isGuest?: boolean;
+  sessionToken?: string;
   profileCompletion?: number;
   hasReceivedCompletionBonus?: boolean;
   isPro?: boolean;

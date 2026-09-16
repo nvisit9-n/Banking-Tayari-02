@@ -116,8 +116,10 @@ export function sanitizeUserProfile(profile: Partial<UserProfile> | null | undef
     totalQuestionsAnswered: sanitizeNumber(profile?.totalQuestionsAnswered, 0, 0, 100000),
     notesRead: sanitizeNumber(profile?.notesRead, 0, 0, 10000),
     registeredAt: sanitizeString(profile?.registeredAt || new Date().toISOString()),
-    isRegistered: Boolean(profile?.isRegistered ?? true),
-    profileCompletion: sanitizeNumber(profile?.profileCompletion, 50, 0, 100),
+    isRegistered: Boolean(profile?.isRegistered ?? (profile?.isGuest ? false : Boolean(safeEmail))),
+    isGuest: Boolean(profile?.isGuest || !safeEmail),
+    sessionToken: profile?.sessionToken,
+    profileCompletion: sanitizeNumber(profile?.profileCompletion, profile?.isGuest ? 20 : 50, 0, 100),
     hasReceivedCompletionBonus: Boolean(profile?.hasReceivedCompletionBonus),
     isPro: Boolean(profile?.isPro || profile?.isProUser || profile?.proStatus === 'active'),
     isProUser: Boolean(profile?.isPro || profile?.isProUser || profile?.proStatus === 'active'),
@@ -130,12 +132,11 @@ export function sanitizeUserProfile(profile: Partial<UserProfile> | null | undef
  * Checks whether an email matches any designated official administrator account.
  */
 export const AUTHORIZED_ADMIN_EMAILS = [
-  'banking.nep28@gmail.com',
-  'rishiramthapa30@gmail.com',
   'rishiramthapa3@gmail.com',
+  'rishiramthapa30@gmail.com',
   'admin@bankingtayari.np'
 ];
-export const OFFICIAL_ADMIN_EMAIL = 'rishiramthapa30@gmail.com';
+export const OFFICIAL_ADMIN_EMAIL = 'rishiramthapa3@gmail.com';
 export const MASTER_ADMIN_PIN = '885522';
 
 export function isUserAdmin(email?: string | null): boolean {

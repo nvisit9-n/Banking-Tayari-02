@@ -29,15 +29,19 @@ export const UserProfileBanner: React.FC<UserProfileBannerProps> = ({
   onStartChallenge,
   onOpenNotes
 }) => {
-  const { user, refreshUser, addToast, setIsProfileModalOpen, setActiveTab } = useApp();
+  const { user, refreshUser, addToast, setIsProfileModalOpen, setActiveTab, openLoginModal } = useApp();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState<boolean>(false);
 
+  const isGuest = !user?.email || Boolean(user?.isGuest);
+
   // Dynamic user session bindings:
   const emailPrefix = user?.email ? user.email.split('@')[0] : '';
-  const displayName = user?.displayName || (user?.name && user.name !== 'विद्यार्थी' ? user.name : (emailPrefix || 'परीक्षार्थी'));
-  const userEmail = user?.email || '';
-  const photoURL = user?.photoURL || user?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0B2046&color=fff&size=256`;
+  const displayName = isGuest 
+    ? 'अतिथि प्रयोगकर्ता (Guest)' 
+    : (user?.displayName || (user?.name && user.name !== 'विद्यार्थी' ? user.name : (emailPrefix || 'परीक्षार्थी')));
+  const userEmail = isGuest ? '' : (user?.email || '');
+  const photoURL = user?.photoURL || user?.avatarUrl || (isGuest ? '/default-avatar.png' : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0B2046&color=fff&size=256`);
 
   const userLevel = user.level ?? (Math.floor((user.xp || 100) / 500) + 1);
   const targetExam = user.targetExam || 'नेपाल राष्ट्र बैंक (NRB) - तह ४/५';
@@ -246,19 +250,37 @@ export const UserProfileBanner: React.FC<UserProfileBannerProps> = ({
               )}
             </div>
 
-            {/* Contact Information */}
+            {/* Contact Information or Guest Login prompt */}
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1 text-xs text-slate-300 pt-0.5">
-              {userEmail && (
-                <p className="flex items-center gap-1.5">
-                  <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate max-w-[240px] sm:max-w-none">{userEmail}</span>
-                </p>
-              )}
-              {user.phone && (
-                <p className="flex items-center gap-1 font-mono">
-                  <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span>{user.phone}</span>
-                </p>
+              {isGuest ? (
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={openLoginModal}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-md border border-blue-400/40 active:scale-95 transition cursor-pointer"
+                  >
+                    <User className="w-3.5 h-3.5" />
+                    <span>लगइन गर्नुहोस्</span>
+                  </button>
+                  <span className="text-[11px] text-slate-300 hidden sm:inline">
+                    (स्कोर र प्रगति सुरक्षित गर्न खाता खोल्नुहोस्)
+                  </span>
+                </div>
+              ) : (
+                <>
+                  {userEmail && (
+                    <p className="flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate max-w-[240px] sm:max-w-none">{userEmail}</span>
+                    </p>
+                  )}
+                  {user.phone && (
+                    <p className="flex items-center gap-1 font-mono">
+                      <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>{user.phone}</span>
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -289,17 +311,30 @@ export const UserProfileBanner: React.FC<UserProfileBannerProps> = ({
             <span>{nextLevelXp - (currentXp % 500)} XP बाँकी</span>
           </div>
 
-          {/* Edit Profile Button (Min 44px touch target) */}
-          <button
-            type="button"
-            id="dashboard-edit-profile-btn"
-            onClick={handleOpenEdit}
-            className="w-full min-h-[44px] py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/20 active:scale-[0.99] text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer border border-white/15"
-            title="प्रोफाइल सम्पादन गर्नुहोस् (Edit Profile)"
-          >
-            <Edit3 className="w-3.5 h-3.5 text-amber-300" />
-            <span>प्रोफाइल सम्पादन गर्नुहोस्</span>
-          </button>
+          {/* Profile Action Button (Min 44px touch target) */}
+          {isGuest ? (
+            <button
+              type="button"
+              id="dashboard-guest-login-btn"
+              onClick={openLoginModal}
+              className="w-full min-h-[44px] py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.99] text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-md"
+              title="Google वा इमेलबाट लगइन गर्नुहोस्"
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>लगइन / खाता खोल्नुहोस्</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              id="dashboard-edit-profile-btn"
+              onClick={handleOpenEdit}
+              className="w-full min-h-[44px] py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/20 active:scale-[0.99] text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer border border-white/15"
+              title="प्रोफाइल सम्पादन गर्नुहोस् (Edit Profile)"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-amber-300" />
+              <span>प्रोफाइल सम्पादन गर्नुहोस्</span>
+            </button>
+          )}
         </div>
       </div>
 

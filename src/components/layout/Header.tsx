@@ -162,10 +162,13 @@ export const Header: React.FC = () => {
     isAdminAuthenticated,
     purchases,
     bookmarks,
-    logout
+    logout,
+    openLoginModal
   } = useApp();
 
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState<boolean>(false);
+
+  const isGuest = !user?.email || Boolean(user?.isGuest);
 
   // Visibility logic for the Admin button: ONLY when the authorized admin is logged in
   const isAdmin = Boolean(user && isUserAdmin(user.email));
@@ -177,9 +180,11 @@ export const Header: React.FC = () => {
 
   // Dynamic user session bindings:
   const emailPrefix = user?.email ? user.email.split('@')[0] : '';
-  const displayName = user?.displayName || (user?.name && user.name !== 'विद्यार्थी' ? user.name : (emailPrefix || 'परीक्षार्थी'));
-  const userEmail = user?.email || '';
-  const photoURL = user?.photoURL || user?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0B2046&color=fff&size=256`;
+  const displayName = isGuest
+    ? 'अतिथि'
+    : (user?.displayName || (user?.name && user.name !== 'विद्यार्थी' ? user.name : (emailPrefix || 'परीक्षार्थी')));
+  const userEmail = isGuest ? '' : (user?.email || '');
+  const photoURL = user?.photoURL || user?.avatarUrl || (isGuest ? '/default-avatar.png' : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0B2046&color=fff&size=256`);
 
   const drawerNavItems: { tab: NavigationTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: string | number; badgeColor?: string }[] = [
     { tab: 'home', label: 'गृहपृष्ठ (Home)', icon: Home },
@@ -356,42 +361,70 @@ export const Header: React.FC = () => {
               )}
 
               {/* Header Profile Section & Trigger (Min 44px touch target on mobile) */}
-              <button 
-                type="button"
-                onClick={() => setIsProfileModalOpen(true)}
-                id="header-profile-btn"
-                className="min-h-[44px] flex items-center gap-2 p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border-l pl-2 sm:pl-3 ml-0.5 sm:ml-1 border-slate-200 dark:border-slate-800 group text-left cursor-pointer active:scale-95"
-                title={`${displayName} - प्रोफाइल सम्पादन`}
-              >
-                <div className="text-right hidden sm:block max-w-[140px]">
-                  <div className="flex items-center justify-end gap-1.5">
-                    <p className="text-xs text-slate-800 dark:text-slate-200 font-bold group-hover:text-blue-600 dark:group-hover:text-blue-400 transition truncate" title={displayName}>
-                      {displayName}
+              {isGuest ? (
+                <div className="flex items-center gap-1.5 pl-2 sm:pl-3 border-l border-slate-200 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={openLoginModal}
+                    id="header-login-btn"
+                    className="min-h-[40px] px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 transition cursor-pointer"
+                    title="Google वा इमेलबाट लगइन गर्नुहोस्"
+                  >
+                    <UserIcon className="w-3.5 h-3.5" />
+                    <span>लगइन</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsProfileModalOpen(true)}
+                    className="p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                    title="अतिथि प्रोफाइल हेर्नुहोस्"
+                  >
+                    <img 
+                      src={photoURL} 
+                      alt={displayName} 
+                      referrerPolicy="no-referrer"
+                      className="w-8 h-8 rounded-full border border-slate-300 dark:border-slate-700 object-cover shadow-xs"
+                    />
+                  </button>
+                </div>
+              ) : (
+                <button 
+                  type="button"
+                  onClick={() => setIsProfileModalOpen(true)}
+                  id="header-profile-btn"
+                  className="min-h-[44px] flex items-center gap-2 p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border-l pl-2 sm:pl-3 ml-0.5 sm:ml-1 border-slate-200 dark:border-slate-800 group text-left cursor-pointer active:scale-95"
+                  title={`${displayName} - प्रोफाइल सम्पादन`}
+                >
+                  <div className="text-right hidden sm:block max-w-[140px]">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <p className="text-xs text-slate-800 dark:text-slate-200 font-bold group-hover:text-blue-600 dark:group-hover:text-blue-400 transition truncate" title={displayName}>
+                        {displayName}
+                      </p>
+                      {isPro && (
+                        <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[9px] font-black tracking-wider border border-amber-500/30 flex items-center gap-0.5 shadow-2xs" title="Banking Tayari Pro Active">
+                          <Crown className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+                          <span>PRO</span>
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] font-mono text-slate-500 dark:text-slate-400 truncate" title={userEmail || 'विद्यार्थी'}>
+                      {userEmail || user?.targetExam?.split(' ')[0] || 'विद्यार्थी'}
                     </p>
-                    {isPro && (
-                      <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[9px] font-black tracking-wider border border-amber-500/30 flex items-center gap-0.5 shadow-2xs" title="Banking Tayari Pro Active">
-                        <Crown className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
-                        <span>PRO</span>
-                      </span>
+                  </div>
+                  
+                  <div className="relative">
+                    <img 
+                      src={photoURL} 
+                      alt={displayName} 
+                      referrerPolicy="no-referrer"
+                      className="w-8 h-8 sm:w-8 sm:h-8 rounded-full border border-slate-300 dark:border-slate-700 object-cover shadow-sm transition-transform group-hover:scale-105"
+                    />
+                    {user && (
+                      <span className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full" />
                     )}
                   </div>
-                  <p className="text-[10px] font-mono text-slate-500 dark:text-slate-400 truncate" title={userEmail || 'विद्यार्थी'}>
-                    {userEmail || user?.targetExam?.split(' ')[0] || 'विद्यार्थी'}
-                  </p>
-                </div>
-                
-                <div className="relative">
-                  <img 
-                    src={photoURL} 
-                    alt={displayName} 
-                    referrerPolicy="no-referrer"
-                    className="w-8 h-8 sm:w-8 sm:h-8 rounded-full border border-slate-300 dark:border-slate-700 object-cover shadow-sm transition-transform group-hover:scale-105"
-                  />
-                  {user && (
-                    <span className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full" />
-                  )}
-                </div>
-              </button>
+                </button>
+              )}
 
             </div>
           </div>
@@ -469,17 +502,31 @@ export const Header: React.FC = () => {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMobileDrawerOpen(false);
-                  setIsProfileModalOpen(true);
-                }}
-                className="w-full mt-3 py-1.5 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1.5 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-750 transition"
-              >
-                <Edit3 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                <span>प्रोफाइल सम्पादन गर्नुहोस्</span>
-              </button>
+              {isGuest ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileDrawerOpen(false);
+                    openLoginModal();
+                  }}
+                  className="w-full mt-3 py-2 px-3 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md hover:bg-blue-500 transition cursor-pointer"
+                >
+                  <UserIcon className="w-3.5 h-3.5" />
+                  <span>लगइन / खाता खोल्नुहोस्</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileDrawerOpen(false);
+                    setIsProfileModalOpen(true);
+                  }}
+                  className="w-full mt-3 py-1.5 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1.5 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-750 transition"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>प्रोफाइल सम्पादन गर्नुहोस्</span>
+                </button>
+              )}
             </div>
 
             {/* Navigation List */}

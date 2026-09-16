@@ -6,80 +6,41 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { AppProvider } from './context/AppContext';
 import { Dashboard } from './components/Dashboard';
-import { LoginModal } from './components/auth/LoginModal';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { UserProfile } from './types';
-import { safeStorage } from './utils/safeHelpers';
-import { sanitizeUserProfile } from './utils/sanitizer';
-
-/**
- * Validates and retrieves the persistent user profile from localStorage ('user_profile').
- * Returns null if no valid, registered user profile is found.
- */
-function getValidStoredProfile(): UserProfile | null {
-  try {
-    const raw = localStorage.getItem('user_profile') || safeStorage.getItem('user_profile');
-    if (!raw) return null;
-
-    const parsed = JSON.parse(raw);
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      (
-        (parsed.email && typeof parsed.email === 'string' && parsed.email.includes('@')) ||
-        (parsed.phone && typeof parsed.phone === 'string' && parsed.phone.trim().length >= 7)
-      )
-    ) {
-      return sanitizeUserProfile(parsed);
-    }
-    return null;
-  } catch (err) {
-    console.error('Error parsing user_profile from localStorage:', err);
-    return null;
-  }
-}
+import { StorageService } from './services/storageService';
 
 export default function App() {
-  // Authentication State strictly checked against localStorage.getItem('user_profile')
-  const [user, setUser] = useState<UserProfile | null>(() => getValidStoredProfile());
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => Boolean(getValidStoredProfile()));
+  // Authentication State: Dynamic authenticated profile or Guest User Profile
+  const [user, setUser] = useState<UserProfile>(() => StorageService.getUserProfile());
 
-  // Logout / Edit Profile Reset handler
+  // Logout handler: completely clear active profile and reset to Guest User
   const handleLogout = useCallback(() => {
-    try {
-      localStorage.removeItem('user_profile');
-      safeStorage.removeItem('user_profile');
-      localStorage.removeItem('btn_registration_completed_v1');
-      safeStorage.removeItem('btn_registration_completed_v1');
-      localStorage.removeItem('btn_student_profile_v2');
-      safeStorage.removeItem('btn_student_profile_v2');
-      safeStorage.removeItem('btn_user_profile_v1');
-    } catch (e) {
-      console.error('Error clearing user profile on logout:', e);
-    }
-    setUser(null);
-    setIsLoggedIn(false);
+    StorageService.clearUserProfile();
+    const guest = StorageService.getGuestProfile();
+    setUser(guest);
+    window.dispatchEvent(new CustomEvent('btn:logout'));
+    window.dispatchEvent(new CustomEvent('btn:profile-updated', { detail: guest }));
   }, []);
 
-  // Form submission / unlock portal callback
-  const handleLoginSuccess = useCallback((formData: UserProfile) => {
-    setUser(formData);
-    setIsLoggedIn(true);
+  // Login success handler: persist real user session
+  const handleLoginSuccess = useCallback((profile: UserProfile) => {
+    StorageService.saveUserProfile(profile);
+    setUser(profile);
+    window.dispatchEvent(new CustomEvent('btn:profile-updated', { detail: profile }));
   }, []);
 
   // Listen for storage events and cross-tab/subcomponent auth triggers
   useEffect(() => {
     const syncAuth = () => {
-      const validProfile = getValidStoredProfile();
-      setUser(validProfile);
-      setIsLoggedIn(Boolean(validProfile));
+      const activeProfile = StorageService.getUserProfile();
+      setUser(activeProfile);
     };
 
     const handleProfileUpdated = (e: Event) => {
       const customEvt = e as CustomEvent<UserProfile>;
       if (customEvt.detail) {
         setUser(customEvt.detail);
-        setIsLoggedIn(true);
       } else {
         syncAuth();
       }
@@ -96,30 +57,8 @@ export default function App() {
     };
   }, [handleLogout]);
 
-  // =========================================================================
-  // 1. INSTANT & FRICTIONLESS AUTHENTICATION FLOW
-  // Google Sign-In is primary. No blocking onboarding form.
-  // Upon login, redirect immediately to Dashboard.
-  // =========================================================================
-  if (!isLoggedIn || !user) {
-    return (
-      <ErrorBoundary>
-        <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center relative overflow-hidden">
-          <LoginModal
-            isOpen={true}
-            setUser={setUser}
-            setIsLoggedIn={setIsLoggedIn}
-            onSuccess={handleLoginSuccess}
-          />
-        </div>
-      </ErrorBoundary>
-    );
-  }
-
-  // =========================================================================
-  // 2. UNLOCKED PORTAL ACCESS
-  // Render Main Dashboard interface and full portal only after authenticated login.
-  // =========================================================================
+  // Render Main Dashboard interface within AppProvider.
+  // LoginModal is managed globally via AppContext (openLoginModal/closeLoginModal).
   return (
     <ErrorBoundary>
       <AppProvider initialUser={user}>

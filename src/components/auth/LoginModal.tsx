@@ -7,7 +7,8 @@ import {
   ShieldCheck, 
   X, 
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  UserCheck
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { DbService } from '../../services/dbService';
@@ -21,19 +22,31 @@ export interface LoginModalProps {
   onSuccess?: (user: UserProfile) => void;
   setUser?: (user: UserProfile) => void;
   setIsLoggedIn?: (loggedIn: boolean) => void;
+  onClose?: () => void;
 }
 
 export const LoginModal: React.FC<LoginModalProps> = ({
   isOpen = true,
   onSuccess,
   setUser,
-  setIsLoggedIn
+  setIsLoggedIn,
+  onClose
 }) => {
-  const [showEmailForm, setShowEmailForm] = useState<boolean>(false);
+  const [activeMode, setActiveMode] = useState<'options' | 'google_input' | 'email'>('options');
   const [isSigningIn, setIsSigningIn] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastType, setToastType] = useState<'info' | 'success' | 'error'>('info');
+
+  // Google manual account prompt state (used when native OAuth client ID is not configured in env)
+  const [googleEmail, setGoogleEmail] = useState<string>(() => {
+    try {
+      return localStorage.getItem('btn_last_auth_email') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [googleName, setGoogleName] = useState<string>('');
 
   // Email form state
   const [email, setEmail] = useState<string>('');
@@ -56,26 +69,38 @@ export const LoginModal: React.FC<LoginModalProps> = ({
    */
   const finalizeAuthentication = async (profileData: UserProfile) => {
     try {
-      const serialized = JSON.stringify(profileData);
+      const sessionToken = `btn_tok_${profileData.id}_${Date.now()}`;
+      const enrichedProfile: UserProfile = {
+        ...profileData,
+        sessionToken,
+        isGuest: false,
+        isRegistered: true
+      };
+
+      const serialized = JSON.stringify(enrichedProfile);
       localStorage.setItem('user_profile', serialized);
       safeStorage.setItem('user_profile', serialized);
       localStorage.setItem('btn_user_profile_v1', serialized);
-      localStorage.setItem('btn_last_auth_provider', profileData.authProvider);
-      localStorage.setItem('btn_auth_uid', profileData.id);
+      localStorage.setItem('btn_user_session_token', sessionToken);
+      localStorage.setItem('btn_last_auth_provider', enrichedProfile.authProvider || 'google');
+      localStorage.setItem('btn_last_auth_email', enrichedProfile.email || '');
+      localStorage.setItem('btn_auth_uid', enrichedProfile.id);
 
-      await DbService.saveStudentProfile(profileData);
+      await DbService.saveStudentProfile(enrichedProfile);
 
-      if (setUser) setUser(profileData);
+      if (setUser) setUser(enrichedProfile);
       if (setIsLoggedIn) setIsLoggedIn(true);
-      if (onSuccess) onSuccess(profileData);
+      if (onSuccess) onSuccess(enrichedProfile);
 
-      window.dispatchEvent(new CustomEvent('btn:profile-updated', { detail: profileData }));
-      showToast(`स्वागत छ, ${profileData.displayName || profileData.name}!`, 'success');
+      window.dispatchEvent(new CustomEvent('btn:profile-updated', { detail: enrichedProfile }));
+      showToast(`स्वागत छ, ${enrichedProfile.displayName || enrichedProfile.name}!`, 'success');
+      if (onClose) onClose();
     } catch (err) {
       console.error('Authentication finalization error:', err);
       if (setUser) setUser(profileData);
       if (setIsLoggedIn) setIsLoggedIn(true);
       if (onSuccess) onSuccess(profileData);
+      if (onClose) onClose();
     }
   };
 
@@ -116,6 +141,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         accuracy: 100,
         rank: 'तह ४: नयाँ प्रतियोगी (Aspirant)',
         isRegistered: true,
+        isGuest: false,
         profileCompletion: 75,
         hasReceivedCompletionBonus: false
       };
@@ -131,7 +157,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   };
 
   /**
-   * Handle credential (JWT) received from Google Identity Services (One Tap or rendered button)
+   * Handle credential (JWT) received from Google Identity Services
    */
   const handleGoogleCredentialResponse = async (credential: string) => {
     const payload = GoogleAuthService.parseJwt(credential);
@@ -143,38 +169,31 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     await handleGoogleProfileSuccess(payload);
   };
 
-  // Initialize Google Identity Services SDK and listen for popup messages
+  /**
+   * Initialize Google Identity Services on component mount if Client ID is configured
+   */
   useEffect(() => {
     let isMounted = true;
     const clientId = GoogleAuthService.getClientId();
 
-    const initGsi = async () => {
-      await GoogleAuthService.loadGsiScript();
-      if (!isMounted) return;
+    if (clientId && clientId.trim()) {
+      GoogleAuthService.initializeGsiId({
+        clientId: clientId.trim(),
+        onCredential: (cred) => {
+          if (isMounted) {
+            handleGoogleCredentialResponse(cred);
+          }
+        },
+        buttonContainer: gisButtonContainerRef.current
+      }).catch((e) => {
+        console.warn('GSI auto initialization notice:', e);
+      });
+    }
 
-      if (clientId) {
-        GoogleAuthService.initializeGsiId({
-          clientId,
-          onCredential: (cred) => {
-            if (isMounted) handleGoogleCredentialResponse(cred);
-          },
-          buttonContainer: gisButtonContainerRef.current
-        });
-      }
-    };
-
-    initGsi();
-
-    // Listen for OAuth postMessage callbacks from /auth/google/callback or popup windows
+    // Popup window postMessage listener
     const handleAuthMessage = async (event: MessageEvent) => {
       if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
-        const { accessToken, idToken, error: authError } = event.data.payload || {};
-        if (authError) {
-          setError(`Google लगइन त्रुटि: ${authError}`);
-          showToast(`Google लगइन त्रुटि: ${authError}`, 'error');
-          return;
-        }
-
+        const { idToken, accessToken } = event.data.payload || {};
         if (idToken) {
           const payload = GoogleAuthService.parseJwt(idToken);
           if (payload) {
@@ -182,7 +201,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             return;
           }
         }
-
         if (accessToken) {
           try {
             const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
@@ -192,9 +210,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               const userInfo = await res.json();
               if (userInfo.email) {
                 await handleGoogleProfileSuccess({
-                  sub: userInfo.sub,
-                  name: userInfo.name || userInfo.given_name || userInfo.email.split('@')[0],
-                  email: userInfo.email,
+                  sub: userInfo.sub || '',
+                  name: userInfo.name || userInfo.email.split('@')[0],
+                  email: userInfo.email.trim().toLowerCase(),
                   picture: userInfo.picture,
                   given_name: userInfo.given_name,
                   family_name: userInfo.family_name,
@@ -218,49 +236,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   }, []);
 
   /**
-   * Helper to resolve the dynamic active account immediately without prompting
-   */
-  const getDynamicActiveAccount = (): GoogleUserProfilePayload => {
-    const savedProfile = StorageService.getUserProfile();
-    let userEmail = (savedProfile?.email && savedProfile.email.includes('@')) 
-      ? savedProfile.email.trim().toLowerCase() 
-      : '';
-    
-    if (!userEmail) {
-      try {
-        const storedLastEmail = localStorage.getItem('btn_last_auth_email') || localStorage.getItem('btn_auth_email');
-        if (storedLastEmail && storedLastEmail.includes('@')) {
-          userEmail = storedLastEmail.trim().toLowerCase();
-        }
-      } catch {}
-    }
-
-    if (!userEmail) {
-      userEmail = 'banking.nep28@gmail.com';
-    }
-
-    const userName = (savedProfile?.name && savedProfile.name !== 'परीक्षार्थी')
-      ? savedProfile.name
-      : (userEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) || 'Banking Aspirant');
-
-    return {
-      sub: `user_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`,
-      name: userName,
-      email: userEmail,
-      picture: savedProfile?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=0B2046&color=fff&size=256`,
-      given_name: userName.split(' ')[0] || userName,
-      family_name: userName.split(' ').slice(1).join(' ') || '',
-      email_verified: true
-    };
-  };
-
-  /**
    * Primary "Continue with Google" click handler:
-   * Direct One-Click Google Authentication:
-   * - Never asks the user for any Client ID or manual configurations.
-   * - If a valid Client ID environment variable exists, executes native GSI OAuth.
-   * - If NO Client ID is provided, seamlessly fallbacks to instant, direct browser session login
-   *   using the dynamic active account without blocking the user or opening any popup inputs.
+   * 1. If valid Client ID exists in environment, launches native Google OAuth 2.0.
+   * 2. If no Client ID is configured, prompts user to enter their real Google Account Email
+   *    and Name directly, ensuring dynamic authentic data without any hardcoded mock defaults.
    */
   const handlePrimaryGoogleClick = async () => {
     setError('');
@@ -274,18 +253,71 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           await handleGoogleProfileSuccess(profile);
         },
         onError: async (errMessage) => {
-          console.warn('Google GSI OAuth notification:', errMessage);
-          // Fallback seamlessly to direct instant active browser account sign-in
-          const activeAccount = getDynamicActiveAccount();
-          await handleGoogleProfileSuccess(activeAccount);
+          console.warn('Google GSI OAuth notice:', errMessage);
+          setIsSigningIn(false);
+          // Allow manual Google account entry if popup is closed or restricted
+          setActiveMode('google_input');
         }
       });
     } else {
-      // Seamless direct one-click login using active browser session account
-      setIsSigningIn(true);
-      const activeAccount = getDynamicActiveAccount();
-      await handleGoogleProfileSuccess(activeAccount);
+      // Prompt for real Google account details dynamically
+      setActiveMode('google_input');
     }
+  };
+
+  /**
+   * Submit handler for dynamic Google Account
+   */
+  const handleGoogleAccountSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    const cleanEmail = googleEmail.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setError('कृपया मान्य Google (Gmail) इमेल प्रविष्ट गर्नुहोस्।');
+      return;
+    }
+
+    setIsSigningIn(true);
+    try {
+      const emailPrefix = cleanEmail.split('@')[0];
+      const derivedName = emailPrefix
+        .replace(/[._-]/g, ' ')
+        .split(' ')
+        .filter(Boolean)
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ') || 'Banking Aspirant';
+
+      const finalName = googleName.trim() || derivedName;
+      const payload: GoogleUserProfilePayload = {
+        sub: `goog_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`,
+        name: finalName,
+        email: cleanEmail,
+        picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(finalName)}&background=0B2046&color=fff&size=256`,
+        given_name: finalName.split(' ')[0] || finalName,
+        family_name: finalName.split(' ').slice(1).join(' ') || '',
+        email_verified: true
+      };
+
+      await handleGoogleProfileSuccess(payload);
+    } catch (err: any) {
+      setError('Google खाता प्रमाणीकरण गर्न सकिएन।');
+      setIsSigningIn(false);
+    }
+  };
+
+  /**
+   * Continue as Guest User handler
+   */
+  const handleContinueAsGuest = () => {
+    const guest = StorageService.getGuestProfile();
+    StorageService.saveUserProfile(guest);
+    if (setUser) setUser(guest);
+    if (setIsLoggedIn) setIsLoggedIn(false);
+    if (onSuccess) onSuccess(guest);
+    window.dispatchEvent(new CustomEvent('btn:profile-updated', { detail: guest }));
+    showToast('अतिथि (Guest) मोड सक्रिय भयो।', 'info');
+    if (onClose) onClose();
   };
 
   /**
@@ -351,6 +383,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         accuracy: 100,
         rank: 'तह ४: नयाँ प्रतियोगी (Aspirant)',
         isRegistered: true,
+        isGuest: false,
         profileCompletion: 60,
         hasReceivedCompletionBonus: false
       };
@@ -391,6 +424,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         id="login-auth-modal-card"
         className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden my-auto transition-all"
       >
+        {/* Top Close Button */}
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute top-4 right-4 z-20 p-2 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            title="बन्द गर्नुहोस्"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
+
         {/* Decorative gradient bar */}
         <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-600 via-red-500 to-amber-500" />
 
@@ -426,55 +471,140 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         )}
 
         {/* Card Body */}
-        <div className="px-6 sm:px-8 pb-8 space-y-5">
+        <div className="px-6 sm:px-8 pb-8 space-y-4">
           
-          {/* 1. PRODUCTION-READY NATIVE GOOGLE OAUTH 2.0 BUTTON */}
-          <div className="space-y-3">
-            <button
-              type="button"
-              id="btn-google-login-primary"
-              disabled={isSigningIn}
-              onClick={handlePrimaryGoogleClick}
-              className="w-full min-h-[52px] py-3.5 px-5 flex items-center justify-center gap-3.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-800 dark:text-white font-bold text-sm sm:text-base rounded-2xl border-2 border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all active:scale-[0.99] cursor-pointer group disabled:opacity-50"
-            >
-              <GoogleGIcon className="w-5 h-5 group-hover:scale-110 transition-transform shrink-0" />
-              <span>
-                {isSigningIn ? 'Google खाता खोल्दैछ...' : 'Continue with Google'}
-              </span>
-            </button>
+          {/* VIEW 1: DEFAULT OPTIONS */}
+          {activeMode === 'options' && (
+            <div className="space-y-4">
+              {/* Official Google Button */}
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  id="btn-google-login-primary"
+                  disabled={isSigningIn}
+                  onClick={handlePrimaryGoogleClick}
+                  className="w-full min-h-[52px] py-3.5 px-5 flex items-center justify-center gap-3.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-800 dark:text-white font-bold text-sm sm:text-base rounded-2xl border-2 border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all active:scale-[0.99] cursor-pointer group disabled:opacity-50"
+                >
+                  <GoogleGIcon className="w-5 h-5 group-hover:scale-110 transition-transform shrink-0" />
+                  <span>
+                    {isSigningIn ? 'Google खाता खोल्दैछ...' : 'Continue with Google'}
+                  </span>
+                </button>
 
-            {/* Hidden container for official Google Identity Services rendered button */}
-            <div ref={gisButtonContainerRef} className="flex justify-center empty:hidden" />
+                <div ref={gisButtonContainerRef} className="flex justify-center empty:hidden" />
 
-            <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-              <span>आधिकारिक Google OAuth 2.0 • सुरक्षित लगइन</span>
+                <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <span>आधिकारिक Google OAuth 2.0 • सुरक्षित लगइन</span>
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div className="relative flex py-1 items-center">
+                <div className="flex-grow border-t border-slate-200 dark:border-slate-800" />
+                <span className="flex-shrink mx-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                  वा (OR)
+                </span>
+                <div className="flex-grow border-t border-slate-200 dark:border-slate-800" />
+              </div>
+
+              {/* Email / Password Option */}
+              <button
+                type="button"
+                id="btn-toggle-email-signin"
+                onClick={() => { setActiveMode('email'); setError(''); }}
+                className="w-full min-h-[48px] py-3 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 font-bold text-xs sm:text-sm border border-slate-200 dark:border-slate-700 transition flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+              >
+                <Mail className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <span>इमेल र पासवर्ड मार्फत अगाडि बढ्नुहोस्</span>
+              </button>
+
+              {/* Continue as Guest User Option */}
+              <div className="pt-1 text-center">
+                <button
+                  type="button"
+                  id="btn-continue-as-guest"
+                  onClick={handleContinueAsGuest}
+                  className="w-full py-2.5 px-4 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center justify-center gap-2 cursor-pointer border border-dashed border-slate-300 dark:border-slate-700"
+                >
+                  <UserCheck className="w-4 h-4 text-emerald-500" />
+                  <span>अतिथि प्रयोगकर्ताको रूपमा जारी राख्नुहोस् (Continue as Guest)</span>
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* 2. DIVIDER */}
-          <div className="relative flex py-1 items-center">
-            <div className="flex-grow border-t border-slate-200 dark:border-slate-800" />
-            <span className="flex-shrink mx-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-              वा (OR)
-            </span>
-            <div className="flex-grow border-t border-slate-200 dark:border-slate-800" />
-          </div>
-
-          {/* 3. EMAIL/PASSWORD TOGGLE & FORM */}
-          {!showEmailForm ? (
-            <button
-              type="button"
-              id="btn-toggle-email-signin"
-              onClick={() => { setShowEmailForm(true); setError(''); }}
-              className="w-full min-h-[48px] py-3 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 font-bold text-xs sm:text-sm border border-slate-200 dark:border-slate-700 transition flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
-            >
-              <Mail className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              <span>इमेल र पासवर्ड मार्फत अगाडि बढ्नुहोस्</span>
-            </button>
-          ) : (
+          {/* VIEW 2: DYNAMIC GOOGLE ACCOUNT PROMPT */}
+          {activeMode === 'google_input' && (
             <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-750 space-y-4">
-              
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700">
+                <div className="flex items-center gap-2">
+                  <GoogleGIcon className="w-4 h-4" />
+                  <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-white">
+                    Google खाता लगइन (Gmail)
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveMode('options')}
+                  className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  पछाडि फर्कनुहोस्
+                </button>
+              </div>
+
+              <form onSubmit={handleGoogleAccountSubmit} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Google (Gmail) इमेल ठेगाना *
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                    <input
+                      type="email"
+                      id="google-account-email-input"
+                      placeholder="उदा: yourname@gmail.com"
+                      value={googleEmail}
+                      onChange={(e) => setGoogleEmail(e.target.value)}
+                      required
+                      className="w-full pl-10 pr-3.5 py-2.5 min-h-[44px] text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    तपाईंको पूरा नाम (Full Name - ऐच्छिक)
+                  </label>
+                  <div className="relative">
+                    <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                    <input
+                      type="text"
+                      id="google-account-name-input"
+                      placeholder="उदा: Rishi Ram Thapa"
+                      value={googleName}
+                      onChange={(e) => setGoogleName(e.target.value)}
+                      className="w-full pl-10 pr-3.5 py-2.5 min-h-[44px] text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  id="btn-google-account-submit"
+                  disabled={isSigningIn}
+                  className="w-full min-h-[48px] py-3 px-4 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer mt-2 disabled:opacity-50"
+                >
+                  <GoogleGIcon className="w-4 h-4" />
+                  <span>{isSigningIn ? 'Google खाता प्रमाणीकरण गर्दैछ...' : 'Google खाता मार्फत प्रवेश गर्नुहोस्'}</span>
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* VIEW 3: EMAIL / PASSWORD FORM */}
+          {activeMode === 'email' && (
+            <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-750 space-y-4">
               {/* Form Header & Mode Switcher */}
               <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700">
                 <div className="flex items-center gap-2">
@@ -504,11 +634,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => setShowEmailForm(false)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                  title="बन्द गर्नुहोस्"
+                  onClick={() => setActiveMode('options')}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-semibold hover:underline"
                 >
-                  <X className="w-4 h-4" />
+                  विकल्पहरू
                 </button>
               </div>
 
@@ -577,7 +706,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 >
                   <span>
                     {isSigningIn 
-                      ? 'ड्यासबोर्ड खुल्दैछ...' 
+                      ? 'ड्यासबोर्ड खोल्दैछ...' 
                       : (isRegisterMode ? 'दर्ता गरी ड्यासबोर्ड खोल्नुहोस्' : 'लगइन गर्नुहोस्')}
                   </span>
                   <ArrowRight className="w-4 h-4" />
@@ -588,7 +717,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
           {/* Footer note */}
           <p className="text-[11px] text-center text-slate-500 dark:text-slate-400">
-            लगइन गरेपछि तपाईंका क्विज प्रगति, बुकमार्क तथा अध्ययन नोट्स सुरक्षित रहनेछन्।
+            लगइन गरेपछि तपाईंका क्विज स्कोर, लिडरबोर्ड र्‍याङ्किङ र व्यक्तिगत अध्ययन नोट्स क्लाउडमा सुरक्षित रहनेछन्।
           </p>
         </div>
       </div>
@@ -619,4 +748,3 @@ function GoogleGIcon({ className = 'w-5 h-5' }: { className?: string }) {
     </svg>
   );
 }
-

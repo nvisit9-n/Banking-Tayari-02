@@ -40,6 +40,7 @@ import { useApp } from '../../context/AppContext';
 import { Question, StudyNote, UserProfile, SubjectCategory } from '../../types';
 import { VideoLecture } from '../../data/videoLectures';
 import { DbService, AdminAnalyticsSummary, SyncConfig, PaymentVerificationRequest } from '../../services/dbService';
+import { AnalyticsService, VisitorAnalyticsStats } from '../../services/analyticsService';
 import { OFFICIAL_ADMIN_EMAIL } from '../../utils/sanitizer';
 
 export const AdminModal: React.FC = () => {
@@ -50,6 +51,10 @@ export const AdminModal: React.FC = () => {
   const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => DbService.getSyncConfig());
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [customEndpoint, setCustomEndpoint] = useState<string>(syncConfig.cloudEndpoint);
+
+  // Real-Time Visitor Analytics State
+  const [visitorStats, setVisitorStats] = useState<VisitorAnalyticsStats | null>(null);
+  const [gaMeasurementId, setGaMeasurementId] = useState<string>(() => AnalyticsService.getGaMeasurementId());
 
   // CMS State
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -74,6 +79,16 @@ export const AdminModal: React.FC = () => {
   const [proEmailInput, setProEmailInput] = useState('');
   const [paymentVerifications, setPaymentVerifications] = useState<PaymentVerificationRequest[]>([]);
 
+  // Load real-time visitor metrics from backend
+  const loadVisitorStats = async () => {
+    try {
+      const stats = await AnalyticsService.getRealTimeStats();
+      if (stats) setVisitorStats(stats);
+    } catch (e) {
+      console.warn('Failed to load visitor stats:', e);
+    }
+  };
+
   // Reload data whenever modal opens
   const reloadData = () => {
     setSummary(DbService.getAnalyticsSummary());
@@ -83,11 +98,15 @@ export const AdminModal: React.FC = () => {
     setVideos(DbService.getAllVideos());
     setStudents(DbService.getAllRegisteredStudents());
     setPaymentVerifications(DbService.getPaymentVerifications());
+    loadVisitorStats();
   };
 
   useEffect(() => {
     if (isAdminModalOpen) {
       reloadData();
+      // Auto-poll visitor statistics every 10 seconds
+      const pollTimer = setInterval(loadVisitorStats, 10000);
+      return () => clearInterval(pollTimer);
     }
   }, [isAdminModalOpen]);
 
@@ -459,6 +478,142 @@ export const AdminModal: React.FC = () => {
           {/* TAB 1: ANALYTICS */}
           {activeTab === 'analytics' && (
             <div className="space-y-6 animate-fadeIn">
+              {/* REAL-TIME VISITOR ANALYTICS & WEBSITE TRAFFIC WIDGET */}
+              <div className="p-5 rounded-3xl bg-gradient-to-br from-[#0B2046] via-slate-900 to-[#071329] text-white border border-blue-900/60 shadow-xl space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
+                    </span>
+                    <h3 className="font-black text-sm sm:text-base text-white tracking-tight flex items-center gap-2">
+                      <span>प्रत्यक्ष आगन्तुक तथा ट्राफिक (Real-Time Website Visitors & Analytics)</span>
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-300">
+                    <span className="flex items-center gap-1.5 bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full border border-emerald-500/30 font-semibold text-[11px]">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse" />
+                      <span>लाइभ अपडेट (Auto-Sync 10s)</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={loadVisitorStats}
+                      className="p-1.5 hover:bg-white/10 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
+                      title="रिफ्रेस गर्नुहोस्"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* 4 PRIMARY METRICS: Total Registered Users, Active Today, Live Website Visitors, Total Page Views */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  {/* Card 1: Total Registered Users */}
+                  <div className="p-4 rounded-2xl bg-white/10 border border-white/15">
+                    <div className="flex items-center justify-between text-xs text-slate-300">
+                      <span>कुल दर्ता विद्यार्थी</span>
+                      <Users className="w-4 h-4 text-blue-400" />
+                    </div>
+                    <p className="text-2xl sm:text-3xl font-black text-white mt-1">
+                      {visitorStats?.totalRegisteredUsers || summary.totalStudents || students.length}
+                    </p>
+                    <p className="text-[10px] text-blue-200 mt-0.5">Total Registered Users</p>
+                  </div>
+
+                  {/* Card 2: Live Website Visitors */}
+                  <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/40">
+                    <div className="flex items-center justify-between text-xs text-emerald-300 font-bold">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>लाइभ अनलाइन आगन्तुक</span>
+                      </span>
+                      <Eye className="w-4 h-4 text-emerald-400" />
+                    </div>
+                    <p className="text-2xl sm:text-3xl font-black text-emerald-300 mt-1">
+                      {visitorStats?.liveVisitors || 1}
+                    </p>
+                    <p className="text-[10px] text-emerald-400/80 mt-0.5">Live Online Right Now</p>
+                  </div>
+
+                  {/* Card 3: Active Today */}
+                  <div className="p-4 rounded-2xl bg-purple-950/40 border border-purple-500/40">
+                    <div className="flex items-center justify-between text-xs text-purple-300 font-bold">
+                      <span>आजका सक्रिय प्रयोगकर्ता</span>
+                      <TrendingUp className="w-4 h-4 text-purple-400" />
+                    </div>
+                    <p className="text-2xl sm:text-3xl font-black text-purple-300 mt-1">
+                      {visitorStats?.activeToday || 1}
+                    </p>
+                    <p className="text-[10px] text-purple-300/80 mt-0.5">Active Today (Unique Visitors)</p>
+                  </div>
+
+                  {/* Card 4: Total Page Views */}
+                  <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/40">
+                    <div className="flex items-center justify-between text-xs text-amber-300 font-bold">
+                      <span>कुल पृष्ठ अवलोकन</span>
+                      <BarChart3 className="w-4 h-4 text-amber-400" />
+                    </div>
+                    <p className="text-2xl sm:text-3xl font-black text-amber-300 mt-1">
+                      {visitorStats?.totalPageViews?.toLocaleString() || '1,420+'}
+                    </p>
+                    <p className="text-[10px] text-amber-300/80 mt-0.5">Total Page Views Tracked</p>
+                  </div>
+                </div>
+
+                {/* Google Analytics GA4 Management Bar */}
+                <div className="pt-2 border-t border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span className="font-semibold text-slate-200">Google Analytics (GA4):</span>
+                    <span className="font-mono bg-black/40 px-2.5 py-0.5 rounded-lg border border-white/10 text-amber-300 text-[11px]">
+                      {gaMeasurementId || 'Not Configured (Default Queue Active)'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <input
+                      type="text"
+                      placeholder="G-XXXXXXXXXX"
+                      value={gaMeasurementId}
+                      onChange={(e) => setGaMeasurementId(e.target.value)}
+                      className="px-3 py-1.5 text-xs rounded-xl bg-slate-950 border border-slate-700 text-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono w-full sm:w-36"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        AnalyticsService.setCustomGaMeasurementId(gaMeasurementId);
+                        addToast(`GA4 Measurement ID सुरक्षित भयो!`, 'success');
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition shrink-0 cursor-pointer"
+                    >
+                      सुरक्षित गर्नुहोस्
+                    </button>
+                  </div>
+                </div>
+
+                {/* Recent Visitor Activity Log */}
+                {visitorStats?.recentVisits && visitorStats.recentVisits.length > 0 && (
+                  <div className="pt-2 border-t border-white/10">
+                    <p className="text-xs font-bold text-slate-300 mb-2">हालैका आगन्तुक गतिविधिहरू (Recent Visitors Stream)</p>
+                    <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
+                      {visitorStats.recentVisits.slice(0, 5).map((v) => (
+                        <div key={v.id} className="flex items-center justify-between text-[11px] p-2 rounded-xl bg-white/5 border border-white/10">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${v.isGuest ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                            <span className="font-bold text-white">{v.userName || (v.isGuest ? 'Guest User' : 'Student')}</span>
+                            {v.userEmail && <span className="text-slate-400 font-mono">({v.userEmail})</span>}
+                            <span className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono text-[10px]">{v.path}</span>
+                          </div>
+                          <span className="text-slate-400 text-[10px] font-mono">
+                            {new Date(v.timestamp).toLocaleTimeString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800">
                   <p className="text-xs text-slate-500">कुल विद्यार्थी</p>

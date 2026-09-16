@@ -27,55 +27,101 @@ const STORAGE_KEYS = {
   NOTIFICATIONS: 'btn_notifications_v2'
 };
 
+export const GUEST_USER_PROFILE: UserProfile = {
+  id: 'guest_user',
+  authUid: 'guest_user',
+  authProvider: 'guest',
+  name: 'अतिथि प्रयोगकर्ता',
+  displayName: 'Guest User',
+  email: '',
+  phone: '',
+  province: 'बागमती प्रदेश',
+  district: 'काठमाडौं',
+  avatarUrl: '/default-avatar.png',
+  photoURL: '/default-avatar.png',
+  xp: 0,
+  streak: 0,
+  lastActiveDate: new Date().toISOString().split('T')[0],
+  questionsSolved: 0,
+  quizzesCompleted: 0,
+  accuracy: 100,
+  rank: 'अतिथि परीक्षार्थी (Guest)',
+  level: 1,
+  targetExam: 'नेपाल राष्ट्र बैंक - सहायक (तह ४)',
+  registeredAt: new Date().toISOString(),
+  isRegistered: false,
+  isGuest: true,
+  profileCompletion: 20
+};
+
 export class StorageService {
   // --- User Profile ---
+  static getGuestProfile(): UserProfile {
+    return { ...GUEST_USER_PROFILE, lastActiveDate: new Date().toISOString().split('T')[0] };
+  }
+
+  static isUserLoggedIn(): boolean {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('user_profile') : null;
+      if (!raw) return false;
+      const parsed = JSON.parse(raw);
+      return Boolean(parsed && parsed.email && parsed.email.includes('@') && !parsed.isGuest);
+    } catch {
+      return false;
+    }
+  }
+
+  static clearUserProfile(): void {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('user_profile');
+        localStorage.removeItem(STORAGE_KEYS.USER_PROFILE);
+        localStorage.removeItem('btn_registration_completed_v1');
+        localStorage.removeItem('btn_student_profile_v2');
+        localStorage.removeItem('btn_user_profile_v1');
+        localStorage.removeItem('btn_user_session_token');
+        localStorage.removeItem('btn_auth_uid');
+        localStorage.removeItem('btn_last_auth_provider');
+      }
+      safeStorage.removeItem('user_profile');
+      safeStorage.removeItem(STORAGE_KEYS.USER_PROFILE);
+      safeStorage.removeItem('btn_registration_completed_v1');
+      safeStorage.removeItem('btn_student_profile_v2');
+      safeStorage.removeItem('btn_user_profile_v1');
+      safeStorage.removeItem('btn_user_session_token');
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('btn_admin_session_auth');
+      }
+    } catch (e) {
+      console.error('Error clearing profile', e);
+    }
+  }
+
   static getUserProfile(): UserProfile {
     try {
       const authData = safeStorage.getItem('user_profile') || (typeof localStorage !== 'undefined' ? localStorage.getItem('user_profile') : null);
       if (authData) {
         const parsed = safeJsonParse(authData, null);
         if (parsed && typeof parsed === 'object') {
-          return sanitizeUserProfile(parsed);
+          // If valid logged in user with email
+          if (parsed.email && parsed.email.includes('@') && !parsed.isGuest) {
+            return sanitizeUserProfile(parsed);
+          }
+          if (parsed.isGuest) {
+            return sanitizeUserProfile({ ...GUEST_USER_PROFILE, ...parsed });
+          }
         }
       }
       const data = safeStorage.getItem(STORAGE_KEYS.USER_PROFILE) || (typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.USER_PROFILE) : null);
       if (data) {
         const parsed = safeJsonParse(data, null);
-        if (parsed && typeof parsed === 'object') {
+        if (parsed && typeof parsed === 'object' && parsed.email && parsed.email.includes('@')) {
           return sanitizeUserProfile(parsed);
         }
       }
-      return sanitizeUserProfile({
-        id: 'user_default',
-        name: 'परीक्षार्थी',
-        displayName: 'परीक्षार्थी',
-        email: '',
-        xp: 100,
-        streak: 1,
-        lastActiveDate: new Date().toISOString().split('T')[0],
-        questionsSolved: 0,
-        quizzesCompleted: 0,
-        accuracy: 100,
-        rank: 'नयाँ प्रतियोगी',
-        level: 1,
-        targetExam: 'नेपाल राष्ट्र बैंक - सहायक (तह ४)'
-      });
+      return this.getGuestProfile();
     } catch {
-      return sanitizeUserProfile({
-        id: 'user_default',
-        name: 'परीक्षार्थी',
-        displayName: 'परीक्षार्थी',
-        email: '',
-        xp: 100,
-        streak: 1,
-        lastActiveDate: new Date().toISOString().split('T')[0],
-        questionsSolved: 0,
-        quizzesCompleted: 0,
-        accuracy: 100,
-        rank: 'नयाँ प्रतियोगी',
-        level: 1,
-        targetExam: 'नेपाल राष्ट्र बैंक - सहायक (तह ४)'
-      });
+      return this.getGuestProfile();
     }
   }
 

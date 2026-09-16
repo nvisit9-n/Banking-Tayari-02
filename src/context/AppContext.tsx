@@ -15,6 +15,8 @@ import { safeStorage } from '../utils/safeHelpers';
 import { MOCK_STUDY_NOTES, MOCK_PREMIUM_NOTES, MOCK_NOTIFICATIONS } from '../data/mockData';
 import { isUserAdmin, OFFICIAL_ADMIN_EMAIL, MASTER_ADMIN_PIN, sanitizeUserProfile } from '../utils/sanitizer';
 import { fetchOfficialChannelVideos } from '../services/youtubeService';
+import { AnalyticsService } from '../services/analyticsService';
+import { LoginModal } from '../components/auth/LoginModal';
 
 interface AppContextType {
   activeTab: NavigationTab;
@@ -23,6 +25,10 @@ interface AppContextType {
   toggleTheme: () => void;
   user: UserProfile;
   setUser: (user: UserProfile) => void;
+  isLoginModalOpen: boolean;
+  setIsLoginModalOpen: (open: boolean) => void;
+  openLoginModal: () => void;
+  closeLoginModal: () => void;
   logout: () => void;
   refreshUser: () => void;
   bookmarks: BookmarkItem[];
@@ -175,7 +181,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialUser?: Us
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [activeReaderPage, setActiveReaderPage] = useState(1);
+
+  const openLoginModal = useCallback(() => setIsLoginModalOpen(true), []);
+  const closeLoginModal = useCallback(() => setIsLoginModalOpen(false), []);
 
   // Dynamic Notification Real-Time Sync (Official YouTube uploads + Practice Sets)
   useEffect(() => {
@@ -309,6 +319,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialUser?: Us
     }
   }, []);
 
+  // Real-Time Visitor Analytics & Heartbeat
+  useEffect(() => {
+    AnalyticsService.initGoogleAnalytics();
+    AnalyticsService.startHeartbeat(() => user);
+    const path = activeTab === 'home' ? '/' : `/${activeTab}`;
+    AnalyticsService.trackPageView(path, `Banking Tayari - ${activeTab}`, user);
+
+    return () => {
+      AnalyticsService.stopHeartbeat();
+    };
+  }, [activeTab, user?.id, user?.email]);
+
   const toggleTheme = () => {
     const next = theme === 'light' ? 'dark' : 'light';
     setThemeState(next);
@@ -322,17 +344,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialUser?: Us
 
   const logout = () => {
     try {
-      localStorage.removeItem('user_profile');
-      safeStorage.removeItem('user_profile');
-      localStorage.removeItem('btn_registration_completed_v1');
-      safeStorage.removeItem('btn_registration_completed_v1');
-      localStorage.removeItem('btn_student_profile_v2');
-      safeStorage.removeItem('btn_student_profile_v2');
-      safeStorage.removeItem('btn_user_profile_v1');
+      StorageService.clearUserProfile();
     } catch (e) {
       console.error('Logout error', e);
     }
+    const guest = StorageService.getGuestProfile();
+    setUserState(guest);
     window.dispatchEvent(new CustomEvent('btn:logout'));
+    window.dispatchEvent(new CustomEvent('btn:profile-updated', { detail: guest }));
+    addToast('सफलतापूर्वक लगआउट भयो। तपाईं अतिथि (Guest) मोडमा हुनुहुन्छ।', 'info');
   };
 
   const refreshUser = () => {
@@ -467,6 +487,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialUser?: Us
         toggleTheme,
         user,
         setUser,
+        isLoginModalOpen,
+        setIsLoginModalOpen,
+        openLoginModal,
+        closeLoginModal,
         logout,
         refreshUser,
         bookmarks,
@@ -533,6 +557,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialUser?: Us
           </div>
         ))}
       </div>
+      <LoginModal 
+        isOpen={isLoginModalOpen} 
+        onClose={closeLoginModal} 
+        onSuccess={(newUser) => { 
+          setUser(newUser); 
+          closeLoginModal(); 
+        }} 
+      />
       {children}
     </AppContext.Provider>
   );

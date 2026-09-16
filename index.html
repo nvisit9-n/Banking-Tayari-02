@@ -15,6 +15,26 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!-- Google Analytics (GA4) Script -->
+    <script>
+      (function() {
+        var gaId = '%VITE_GA_MEASUREMENT_ID%' || window.localStorage.getItem('btn_custom_ga_measurement_id') || '';
+        if (gaId && gaId.indexOf('%') === -1 && gaId.indexOf('G-') === 0) {
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://www.googletagmanager.com/gtag/js?id=' + gaId;
+          document.head.appendChild(s);
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){window.dataLayer.push(arguments);}
+          window.gtag = gtag;
+          gtag('js', new Date());
+          gtag('config', gaId, { send_page_view: true });
+        } else {
+          window.dataLayer = window.dataLayer || [];
+          window.gtag = function(){window.dataLayer.push(arguments);};
+        }
+      })();
+    </script>
     <script>
       window.addEventListener('error', function (event) {
         if (event.error) {
