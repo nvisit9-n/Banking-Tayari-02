@@ -23,7 +23,10 @@ import {
   User as UserIcon,
   LogOut,
   Crown,
-  Info
+  Info,
+  ChevronDown,
+  Landmark,
+  Scale
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { isUserAdmin, OFFICIAL_ADMIN_EMAIL } from '../../utils/sanitizer';
@@ -163,10 +166,13 @@ export const Header: React.FC = () => {
     purchases,
     bookmarks,
     logout,
-    openLoginModal
+    openLoginModal,
+    quizSubCategory,
+    selectQuizSubCategory
   } = useApp();
 
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState<boolean>(false);
+  const [isMobileSangathitOpen, setIsMobileSangathitOpen] = useState<boolean>(true);
 
   const isGuest = !user?.email || Boolean(user?.isGuest);
 
@@ -534,6 +540,141 @@ export const Header: React.FC = () => {
               {drawerNavItems.map(item => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.tab;
+
+                if (item.tab === 'quiz') {
+                  return (
+                    <div key={item.tab} className="space-y-1">
+                      <div className="flex items-center w-full">
+                        <button
+                          type="button"
+                          id="mobile-drawer-sangathit-parent"
+                          onClick={() => {
+                            if (activeTab !== 'quiz') {
+                              selectQuizSubCategory(quizSubCategory || 'sangathit');
+                              setIsMobileSangathitOpen(true);
+                              setIsMobileDrawerOpen(false);
+                            } else {
+                              setIsMobileSangathitOpen(!isMobileSangathitOpen);
+                            }
+                          }}
+                          className={`w-full flex items-center justify-between p-3 rounded-xl text-xs font-bold transition ${
+                            isActive 
+                              ? 'bg-[#0B2046] text-white shadow-sm' 
+                              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0 pr-1">
+                            <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-blue-600 dark:text-blue-400'}`} />
+                            <span className="truncate">संगठित संस्था (Public Enterprises)</span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-red-600 text-white">
+                              ५० सेट
+                            </span>
+                            <span
+                              role="button"
+                              aria-label="टगल गर्नुहोस्"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsMobileSangathitOpen(!isMobileSangathitOpen);
+                              }}
+                              className="p-1 rounded-md hover:bg-white/20 text-slate-300"
+                            >
+                              <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isMobileSangathitOpen ? 'rotate-180' : ''}`} />
+                            </span>
+                          </div>
+                        </button>
+                      </div>
+
+                      {/* Mobile Collapsible Sub-menu Structure */}
+                      <div
+                        id="mobile-sangathit-submenu"
+                        className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                          isMobileSangathitOpen ? 'max-h-96 opacity-100 py-1 space-y-1' : 'max-h-0 opacity-0 pointer-events-none'
+                        }`}
+                      >
+                        {/* 1. संगठित संस्था Pre-Test */}
+                        <button
+                          type="button"
+                          id="mobile-submenu-sangathit"
+                          onClick={() => {
+                            selectQuizSubCategory('sangathit');
+                            setIsMobileDrawerOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between py-2 px-3 pl-6 rounded-lg text-xs transition ${
+                            isActive && quizSubCategory === 'sangathit'
+                              ? 'bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 font-bold border-l-4 border-blue-600 dark:border-blue-400'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 font-medium border-l-4 border-transparent'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Building2 className="w-3.5 h-3.5 shrink-0" />
+                            <div className="text-left truncate">
+                              <p className="truncate font-semibold">१. संगठित संस्था Pre-Test</p>
+                              <p className="text-[10px] opacity-75 font-normal">Public Enterprises Pre-Test</p>
+                            </div>
+                          </div>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-600 text-white shrink-0">
+                            ५० सेट
+                          </span>
+                        </button>
+
+                        {/* 2. बैंकिङ्ग परीक्षा तयारी */}
+                        <button
+                          type="button"
+                          id="mobile-submenu-banking"
+                          onClick={() => {
+                            selectQuizSubCategory('banking');
+                            setIsMobileDrawerOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between py-2 px-3 pl-6 rounded-lg text-xs transition ${
+                            isActive && quizSubCategory === 'banking'
+                              ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 font-bold border-l-4 border-emerald-600 dark:border-emerald-400'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-emerald-600 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 font-medium border-l-4 border-transparent'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Landmark className="w-3.5 h-3.5 shrink-0" />
+                            <div className="text-left truncate">
+                              <p className="truncate font-semibold">२. बैंकिङ्ग परीक्षा तयारी</p>
+                              <p className="text-[10px] opacity-75 font-normal">NRB, NBL, RBB, ADBL</p>
+                            </div>
+                          </div>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-600 text-white shrink-0">
+                            ४ बैंक
+                          </span>
+                        </button>
+
+                        {/* 3. निजामती/लोकसेवा तयारी */}
+                        <button
+                          type="button"
+                          id="mobile-submenu-loksewa"
+                          onClick={() => {
+                            selectQuizSubCategory('loksewa');
+                            setIsMobileDrawerOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between py-2 px-3 pl-6 rounded-lg text-xs transition ${
+                            isActive && quizSubCategory === 'loksewa'
+                              ? 'bg-amber-50 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 font-bold border-l-4 border-amber-600 dark:border-amber-400'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-amber-600 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 font-medium border-l-4 border-transparent'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Scale className="w-3.5 h-3.5 shrink-0" />
+                            <div className="text-left truncate">
+                              <p className="truncate font-semibold">३. निजामती/लोकसेवा तयारी</p>
+                              <p className="text-[10px] opacity-75 font-normal">Loksewa Exam Prep</p>
+                            </div>
+                          </div>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-600 text-white shrink-0">
+                            लोकसेवा
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
 
                 return (
                   <button

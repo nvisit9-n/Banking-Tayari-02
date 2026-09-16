@@ -33,7 +33,17 @@ import { BrandLogo } from '../common/BrandLogo';
 import { SocialLinksBar } from '../common/SocialIcons';
 
 export const Sidebar: React.FC = () => {
-  const { activeTab, setActiveTab, user, purchases, bookmarks, logout } = useApp();
+  const { 
+    activeTab, 
+    setActiveTab, 
+    user, 
+    purchases, 
+    bookmarks, 
+    logout, 
+    quizSubCategory, 
+    selectQuizSubCategory 
+  } = useApp();
+  const [isSangathitDropdownOpen, setIsSangathitDropdownOpen] = useState<boolean>(true);
   const [selectedInst, setSelectedInst] = useState<'NRB' | 'Commercial' | 'EPF'>('NRB');
   const [expandedPaper, setExpandedPaper] = useState<'paper-1' | 'paper-2' | null>('paper-1');
   const [expandedCommercialLevel, setExpandedCommercialLevel] = useState<'level-4-5' | 'level-6' | null>('level-4-5');
@@ -97,6 +107,164 @@ export const Sidebar: React.FC = () => {
             const Icon = item.icon;
             const isActive = activeTab === item.tab;
 
+            if (item.tab === 'quiz') {
+              return (
+                <div key={item.tab} className="space-y-1">
+                  <div className="flex items-center w-full">
+                    <button
+                      type="button"
+                      id="sidebar-nav-sangathit-parent"
+                      onClick={() => {
+                        if (activeTab !== 'quiz') {
+                          selectQuizSubCategory(quizSubCategory || 'sangathit');
+                          setIsSangathitDropdownOpen(true);
+                        } else {
+                          setIsSangathitDropdownOpen(!isSangathitDropdownOpen);
+                        }
+                      }}
+                      className={`w-full flex items-center justify-between p-3 rounded-xl transition-all text-sm group ${
+                        isActive 
+                          ? 'bg-[#0F172A] text-white font-bold shadow-md shadow-slate-900/20' 
+                          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/70 font-medium'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3 min-w-0 pr-1">
+                        <Building2 className={`w-5 h-5 shrink-0 ${
+                          isActive 
+                            ? 'text-white' 
+                            : 'text-blue-600 dark:text-blue-400'
+                        }`} />
+                        <span className="truncate" title="संगठित संस्था (Public Enterprises)">
+                          संगठित संस्था (Public Enterprises)
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-[#DC2626] text-white">
+                          ५० सेट
+                        </span>
+                        <span
+                          role="button"
+                          aria-label="टगल गर्नुहोस्"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsSangathitDropdownOpen(!isSangathitDropdownOpen);
+                          }}
+                          className={`p-1 rounded-md transition-colors ${
+                            isActive ? 'hover:bg-white/20 text-slate-300' : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400'
+                          }`}
+                        >
+                          <ChevronDown 
+                            className={`w-4 h-4 transition-transform duration-300 ${
+                              isSangathitDropdownOpen ? 'rotate-180' : 'rotate-0'
+                            }`} 
+                          />
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Collapsible Sub-menu Structure */}
+                  <div
+                    id="sidebar-sangathit-submenu"
+                    className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                      isSangathitDropdownOpen ? 'max-h-96 opacity-100 py-1 space-y-1' : 'max-h-0 opacity-0 pointer-events-none'
+                    }`}
+                  >
+                    {/* 1. संगठित संस्था Pre-Test (Public Enterprises Pre-Test) */}
+                    <button
+                      type="button"
+                      id="sidebar-submenu-sangathit"
+                      onClick={() => selectQuizSubCategory('sangathit')}
+                      className={`w-full flex items-center justify-between py-2 px-3 pl-7 rounded-lg text-xs transition-all ${
+                        isActive && quizSubCategory === 'sangathit'
+                          ? 'bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 font-bold border-l-4 border-blue-600 dark:border-blue-400 shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 font-medium border-l-4 border-transparent'
+                      }`}
+                      title="1. संगठित संस्था Pre-Test (Public Enterprises Pre-Test)"
+                    >
+                      <div className="flex items-center space-x-2 min-w-0 pr-1">
+                        <Building2 className={`w-3.5 h-3.5 shrink-0 ${
+                          isActive && quizSubCategory === 'sangathit' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'
+                        }`} />
+                        <div className="truncate text-left">
+                          <p className="truncate font-semibold">१. संगठित संस्था Pre-Test</p>
+                          <p className="text-[10px] opacity-75 font-normal">Public Enterprises Pre-Test</p>
+                        </div>
+                      </div>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                        isActive && quizSubCategory === 'sangathit'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                      }`}>
+                        ५० सेट
+                      </span>
+                    </button>
+
+                    {/* 2. बैंकिङ्ग परीक्षा तयारी (Banking Exam Preparation) */}
+                    <button
+                      type="button"
+                      id="sidebar-submenu-banking"
+                      onClick={() => selectQuizSubCategory('banking')}
+                      className={`w-full flex items-center justify-between py-2 px-3 pl-7 rounded-lg text-xs transition-all ${
+                        isActive && quizSubCategory === 'banking'
+                          ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 font-bold border-l-4 border-emerald-600 dark:border-emerald-400 shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 font-medium border-l-4 border-transparent'
+                      }`}
+                      title="2. बैंकिङ्ग परीक्षा तयारी (Banking Exam Preparation)"
+                    >
+                      <div className="flex items-center space-x-2 min-w-0 pr-1">
+                        <Landmark className={`w-3.5 h-3.5 shrink-0 ${
+                          isActive && quizSubCategory === 'banking' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'
+                        }`} />
+                        <div className="truncate text-left">
+                          <p className="truncate font-semibold">२. बैंकिङ्ग परीक्षा तयारी</p>
+                          <p className="text-[10px] opacity-75 font-normal">NRB, NBL, RBB, ADBL</p>
+                        </div>
+                      </div>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                        isActive && quizSubCategory === 'banking'
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                      }`}>
+                        ४ बैंक
+                      </span>
+                    </button>
+
+                    {/* 3. निजामती/लोकसेवा तयारी (Loksewa Exam Preparation) */}
+                    <button
+                      type="button"
+                      id="sidebar-submenu-loksewa"
+                      onClick={() => selectQuizSubCategory('loksewa')}
+                      className={`w-full flex items-center justify-between py-2 px-3 pl-7 rounded-lg text-xs transition-all ${
+                        isActive && quizSubCategory === 'loksewa'
+                          ? 'bg-amber-50 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 font-bold border-l-4 border-amber-600 dark:border-amber-400 shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 font-medium border-l-4 border-transparent'
+                      }`}
+                      title="3. निजामती/लोकसेवा तयारी (Loksewa Exam Preparation)"
+                    >
+                      <div className="flex items-center space-x-2 min-w-0 pr-1">
+                        <Scale className={`w-3.5 h-3.5 shrink-0 ${
+                          isActive && quizSubCategory === 'loksewa' ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'
+                        }`} />
+                        <div className="truncate text-left">
+                          <p className="truncate font-semibold">३. निजामती/लोकसेवा तयारी</p>
+                          <p className="text-[10px] opacity-75 font-normal">Loksewa Exam Prep</p>
+                        </div>
+                      </div>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                        isActive && quizSubCategory === 'loksewa'
+                          ? 'bg-amber-600 text-white'
+                          : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
+                      }`}>
+                        लोकसेवा
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <button
                 key={item.tab}
@@ -111,11 +279,7 @@ export const Sidebar: React.FC = () => {
                   <Icon className={`w-5 h-5 shrink-0 ${
                     isActive 
                       ? 'text-white' 
-                      : item.tab === 'video-lectures' 
-                        ? 'text-red-600 dark:text-red-500' 
-                        : item.tab === 'quiz'
-                          ? 'text-blue-600 dark:text-blue-400'
-                          : 'text-slate-500 dark:text-slate-400'
+                      : 'text-slate-500 dark:text-slate-400'
                   }`} />
                   <span className="truncate" title={item.label}>{item.label}</span>
                 </div>

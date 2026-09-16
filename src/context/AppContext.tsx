@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { 
   NavigationTab, 
+  QuizSubCategory,
   UserProfile, 
   BookmarkItem, 
   PurchaseRecord, 
@@ -48,6 +49,9 @@ interface AppContextType {
   exitQuiz: () => void;
   quizResult: QuizResultData | null;
   setQuizResult: (result: QuizResultData | null) => void;
+  quizSubCategory: QuizSubCategory;
+  setQuizSubCategory: (subCat: QuizSubCategory) => void;
+  selectQuizSubCategory: (subCat: QuizSubCategory) => void;
   isSearchOpen: boolean;
   setIsSearchOpen: (open: boolean) => void;
   isAiModalOpen: boolean;
@@ -433,6 +437,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialUser?: Us
     setActiveQuiz(null);
   };
 
+  const [quizSubCategory, setQuizSubCategoryState] = useState<QuizSubCategory>(() => {
+    try {
+      const saved = localStorage.getItem('btn_quiz_subcategory');
+      if (saved === 'banking' || saved === 'loksewa' || saved === 'sangathit') {
+        return saved;
+      }
+    } catch {}
+    return 'sangathit';
+  });
+
+  const setQuizSubCategory = useCallback((subCat: QuizSubCategory) => {
+    setQuizSubCategoryState(subCat);
+    try {
+      localStorage.setItem('btn_quiz_subcategory', subCat);
+    } catch {}
+  }, []);
+
+  const selectQuizSubCategory = useCallback((subCat: QuizSubCategory) => {
+    setQuizSubCategory(subCat);
+    setActiveTab('quiz');
+    setQuizResult(null);
+    setActiveQuiz(null);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('btn:quiz-subcategory-changed', { detail: { subCategory: subCat } }));
+    }
+  }, [setActiveTab, setQuizSubCategory]);
+
   const unreadNotificationsCount = notifications.filter(n => !n.read).length;
 
   const markNotificationRead = (id: string) => {
@@ -510,6 +541,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialUser?: Us
         exitQuiz,
         quizResult,
         setQuizResult,
+        quizSubCategory,
+        setQuizSubCategory,
+        selectQuizSubCategory,
         isSearchOpen,
         setIsSearchOpen,
         isAiModalOpen,

@@ -29,6 +29,55 @@ export interface SangathitSetMeta {
   badge: string;
   targetLevel: string;
   description: string;
+  instituteTag?: 'NRB' | 'RBB' | 'NBL' | 'ADBL' | 'EPF' | 'CIT' | 'NTC' | 'NEA' | 'LOKSEWA' | 'ALL';
+  category?: 'sangathit' | 'banking' | 'loksewa';
+  bankingExamName?: string;
+  loksewaExamName?: string;
+}
+
+/**
+ * Assign institute and category metadata based on set number
+ */
+export function getSetCategoryMeta(setNumber: number): {
+  instituteTag: 'NRB' | 'RBB' | 'NBL' | 'ADBL' | 'EPF' | 'CIT' | 'NTC' | 'NEA' | 'LOKSEWA';
+  bankingExamName: string;
+  loksewaExamName: string;
+} {
+  // Banking institute assignment:
+  // NRB: Sets 1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34, 37, 40, 43, 46, 49
+  // RBB: Sets 2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47, 50
+  // NBL: Sets 3, 9, 15, 21, 27, 33, 39, 45
+  // ADBL: Sets 6, 12, 18, 24, 30, 36, 42, 48
+  let instituteTag: 'NRB' | 'RBB' | 'NBL' | 'ADBL' | 'EPF' | 'CIT' | 'NTC' | 'NEA' | 'LOKSEWA' = 'NRB';
+  let bankingExamName = 'नेपाल राष्ट्र बैंक (NRB) - सहायक ४ र अधिकृत ३';
+
+  if (setNumber % 3 === 1) {
+    instituteTag = 'NRB';
+    bankingExamName = 'नेपाल राष्ट्र बैंक (NRB) - सहायक ४ र अधिकृत ३';
+  } else if (setNumber % 3 === 2) {
+    instituteTag = 'RBB';
+    bankingExamName = 'राष्ट्रिय वाणिज्य बैंक (RBB) - तह ४ र ५';
+  } else {
+    if (Math.floor(setNumber / 3) % 2 === 1) {
+      instituteTag = 'NBL';
+      bankingExamName = 'नेपाल बैंक लिमिटेड (NBL) - तह ३ र ४';
+    } else {
+      instituteTag = 'ADBL';
+      bankingExamName = 'कृषि विकास बैंक (ADBL) - तह ४ र ५';
+    }
+  }
+
+  // Loksewa Civil service breakdown:
+  let loksewaExamName = 'लोकसेवा आयोग: शाखा अधिकृत प्रथम पत्र';
+  if (setNumber % 3 === 1) {
+    loksewaExamName = 'लोकसेवा आयोग: शाखा अधिकृत (Section Officer) प्रथम पत्र';
+  } else if (setNumber % 3 === 2) {
+    loksewaExamName = 'लोकसेवा आयोग: नायब सुब्बा (Nayab Subba) प्रथम पत्र';
+  } else {
+    loksewaExamName = 'लोकसेवा आयोग: खरिदार (Kharidar) प्रारम्भिक परीक्षा';
+  }
+
+  return { instituteTag, bankingExamName, loksewaExamName };
 }
 
 /**
@@ -56,18 +105,24 @@ export function getAllSangathitSasthaSetMetas(): SangathitSetMeta[] {
   try {
     const dbSets = DbService.getAllFiftySetsFromDatabase();
     if (dbSets && dbSets.length === TOTAL_SETS) {
-      return dbSets.map((s) => ({
-        id: `sangathit-set-${s.setId}`,
-        setNumber: s.setId,
-        title: `Set ${s.setId}: L4 (20 Marks) & L5 (10 Marks)`,
-        nepaliTitle: s.setName,
-        totalQuestions: s.totalQuestions || 50,
-        timeLimitMinutes: s.timeLimitMinutes || 45,
-        difficulty: (s.setId <= 15 ? 'Easy' : s.setId <= 35 ? 'Medium' : 'Hard') as DifficultyLevel,
-        badge: `Set ${s.setId}`,
-        targetLevel: 'तह ४ र तह ५ (L4 & L5)',
-        description: '१० वटै खण्ड (भूगोल, इतिहास, अर्थतन्त्र, संविधान, अन्तर्राष्ट्रिय, विज्ञान/ICT, व्यवस्थापन, बैंकिङ कानुन, गणित, सेवा लेखन/आचरण) का ५० आधिकारिक वस्तुगत प्रश्नहरू।'
-      }));
+      return dbSets.map((s) => {
+        const meta = getSetCategoryMeta(s.setId);
+        return {
+          id: `sangathit-set-${s.setId}`,
+          setNumber: s.setId,
+          title: `Set ${s.setId}: L4 (20 Marks) & L5 (10 Marks)`,
+          nepaliTitle: s.setName,
+          totalQuestions: s.totalQuestions || 50,
+          timeLimitMinutes: s.timeLimitMinutes || 45,
+          difficulty: (s.setId <= 15 ? 'Easy' : s.setId <= 35 ? 'Medium' : 'Hard') as DifficultyLevel,
+          badge: `Set ${s.setId}`,
+          targetLevel: 'तह ४ र तह ५ (L4 & L5)',
+          description: '१० वटै खण्ड (भूगोल, इतिहास, अर्थतन्त्र, संविधान, अन्तर्राष्ट्रिय, विज्ञान/ICT, व्यवस्थापन, बैंकिङ कानुन, गणित, सेवा लेखन/आचरण) का ५० आधिकारिक वस्तुगत प्रश्नहरू।',
+          instituteTag: meta.instituteTag,
+          bankingExamName: meta.bankingExamName,
+          loksewaExamName: meta.loksewaExamName
+        };
+      });
     }
   } catch {
     // fallback
@@ -75,6 +130,7 @@ export function getAllSangathitSasthaSetMetas(): SangathitSetMeta[] {
 
   return SANGATHIT_SASTHA_SETS.map((set, idx) => {
     const setNum = idx + 1;
+    const meta = getSetCategoryMeta(setNum);
     return {
       id: set.id,
       setNumber: setNum,
@@ -85,7 +141,10 @@ export function getAllSangathitSasthaSetMetas(): SangathitSetMeta[] {
       difficulty: set.difficulty,
       badge: `Set ${setNum}`,
       targetLevel: 'तह ४ र तह ५ (L4 & L5)',
-      description: '१० वटै पाठ्यक्रम क्षेत्रहरू (भूगोल, इतिहास, अर्थतन्त्र, संविधान, सार्क/UN, IT/AI, व्यवस्थापन, गणित, संस्थान, भाषा) समावेश गरिएको ५० प्रश्नको सेट।'
+      description: '१० वटै पाठ्यक्रम क्षेत्रहरू (भूगोल, इतिहास, अर्थतन्त्र, संविधान, सार्क/UN, IT/AI, व्यवस्थापन, गणित, संस्थान, भाषा) समावेश गरिएको ५० प्रश्नको सेट।',
+      instituteTag: meta.instituteTag,
+      bankingExamName: meta.bankingExamName,
+      loksewaExamName: meta.loksewaExamName
     };
   });
 }

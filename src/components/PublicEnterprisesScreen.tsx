@@ -26,6 +26,7 @@ import {
   getAllSangathitSasthaSetMetas, 
   getSangathitSasthaSet, 
   getSangathitTotalQuestionCount,
+  getSetCategoryMeta,
   SangathitSetMeta 
 } from '../data/questionBank';
 import { ActiveQuiz } from './quiz/ActiveQuiz';
@@ -36,12 +37,26 @@ import {
 } from '../data/quizData';
 
 export const PublicEnterprisesScreen: React.FC = () => {
-  const { activeQuiz, startQuiz, exitQuiz, quizResult, setQuizResult, setActiveTab, addToast } = useApp();
+  const { 
+    activeQuiz, 
+    startQuiz, 
+    exitQuiz, 
+    quizResult, 
+    setQuizResult, 
+    setActiveTab, 
+    addToast,
+    quizSubCategory,
+    selectQuizSubCategory
+  } = useApp();
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedDifficulty, setSelectedDifficulty] = useState<'All' | DifficultyLevel>('All');
   const [activeSetRange, setActiveSetRange] = useState<'all' | '1-10' | '11-20' | '21-30' | '31-40' | '41-50'>('all');
   const [activeView, setActiveView] = useState<'sets' | 'syllabus' | 'custom'>('sets');
+
+  // Sub-category specific institute / tier filters
+  const [bankingInstituteFilter, setBankingInstituteFilter] = useState<'ALL' | 'NRB' | 'RBB' | 'NBL' | 'ADBL'>('ALL');
+  const [loksewaTierFilter, setLoksewaTierFilter] = useState<'ALL' | 'OFFICER' | 'NASU' | 'KHARIDAR'>('ALL');
 
   // Custom quiz generator state (optional secondary tab)
   const [customCategory, setCustomCategory] = useState<SubjectCategory | 'All'>('All');
@@ -51,20 +66,40 @@ export const PublicEnterprisesScreen: React.FC = () => {
   const allSetMetas = useMemo(() => getAllSangathitSasthaSetMetas(), []);
   const totalQuestionsCount = useMemo(() => getSangathitTotalQuestionCount(), []);
 
-  // Filter sets by search, difficulty, and range
+  // Filter sets by subcategory, institute/tier, search, difficulty, and range
   const filteredSets = useMemo(() => {
     return allSetMetas.filter((set) => {
+      // 1. Subcategory filter
+      if (quizSubCategory === 'banking') {
+        if (bankingInstituteFilter !== 'ALL' && set.instituteTag !== bankingInstituteFilter) {
+          return false;
+        }
+      } else if (quizSubCategory === 'loksewa') {
+        if (loksewaTierFilter === 'OFFICER' && set.setNumber % 3 !== 1) return false;
+        if (loksewaTierFilter === 'NASU' && set.setNumber % 3 !== 2) return false;
+        if (loksewaTierFilter === 'KHARIDAR' && set.setNumber % 3 !== 0) return false;
+      }
+
+      // 2. Search query filter
       const q = searchQuery.trim().toLowerCase();
       const matchesSearch = 
         q === '' || 
         set.title.toLowerCase().includes(q) ||
         set.nepaliTitle.toLowerCase().includes(q) ||
+        (set.bankingExamName && set.bankingExamName.toLowerCase().includes(q)) ||
+        (set.loksewaExamName && set.loksewaExamName.toLowerCase().includes(q)) ||
+        (set.instituteTag && set.instituteTag.toLowerCase().includes(q)) ||
         `set ${set.setNumber}`.includes(q) ||
         `सेट ${set.setNumber}`.includes(q) ||
         String(set.setNumber) === q;
 
-      const matchesDifficulty = selectedDifficulty === 'All' || set.difficulty === selectedDifficulty;
+      if (!matchesSearch) return false;
 
+      // 3. Difficulty filter
+      const matchesDifficulty = selectedDifficulty === 'All' || set.difficulty === selectedDifficulty;
+      if (!matchesDifficulty) return false;
+
+      // 4. Range filter
       let matchesRange = true;
       if (activeSetRange === '1-10') matchesRange = set.setNumber >= 1 && set.setNumber <= 10;
       else if (activeSetRange === '11-20') matchesRange = set.setNumber >= 11 && set.setNumber <= 20;
@@ -72,18 +107,26 @@ export const PublicEnterprisesScreen: React.FC = () => {
       else if (activeSetRange === '31-40') matchesRange = set.setNumber >= 31 && set.setNumber <= 40;
       else if (activeSetRange === '41-50') matchesRange = set.setNumber >= 41 && set.setNumber <= 50;
 
-      return matchesSearch && matchesDifficulty && matchesRange;
+      return matchesRange;
     });
-  }, [allSetMetas, searchQuery, selectedDifficulty, activeSetRange]);
+  }, [allSetMetas, quizSubCategory, bankingInstituteFilter, loksewaTierFilter, searchQuery, selectedDifficulty, activeSetRange]);
 
   /**
-   * Launch a specific Sangathit Sastha 50-question set
+   * Launch a specific 50-question set
    */
   const handleLaunchSet = (setNumber: number) => {
     try {
       const quizSet = getSangathitSasthaSet(setNumber);
       startQuiz(quizSet);
-      addToast(`सङ्गठित संस्था सेट ${setNumber} सुरु भयो! ५० प्रश्नहरू, ४५ मिनेट।`, 'info');
+      if (quizSubCategory === 'banking') {
+        const meta = getSetCategoryMeta(setNumber);
+        addToast(`${meta.bankingExamName} (सेट ${setNumber}) सुरु भयो! ५० प्रश्नहरू, ४५ मिनेट।`, 'info');
+      } else if (quizSubCategory === 'loksewa') {
+        const meta = getSetCategoryMeta(setNumber);
+        addToast(`${meta.loksewaExamName} (सेट ${setNumber}) सुरु भयो! ५० प्रश्नहरू, ४५ मिनेट।`, 'info');
+      } else {
+        addToast(`सङ्गठित संस्था सेट ${setNumber} सुरु भयो! ५० प्रश्नहरू, ४५ मिनेट।`, 'info');
+      }
     } catch (err) {
       console.error('Failed to launch set', err);
       addToast('क्विज लोड गर्न सकिएन, कृपया पुन: प्रयास गर्नुहोस्।', 'error');
@@ -155,19 +198,131 @@ export const PublicEnterprisesScreen: React.FC = () => {
     { num: '१०', title: 'भाषा परीक्षण (English Grammar 3 + Nepali व्याकरण 2)', count: '५ प्रश्न', marks: '१० अङ्क' }
   ];
 
+  // Dynamic configuration for active quizSubCategory
+  const subCategoryConfig = useMemo(() => {
+    if (quizSubCategory === 'banking') {
+      return {
+        title: 'बैंकिङ्ग परीक्षा तयारी (Banking Exam Preparation)',
+        englishTitle: 'Banking Institutes Pre-Test & Model Sets',
+        badge: '४ प्रमुख बैंकहरू: NRB • RBB • NBL • ADBL',
+        badgeBg: 'bg-emerald-600',
+        gradient: 'from-emerald-800 via-teal-900 to-slate-900 border-emerald-500/30 shadow-emerald-950/20',
+        icon: Landmark,
+        description: 'नेपाल राष्ट्र बैंक (NRB), नेपाल बैंक लिमिटेड (NBL), राष्ट्रिय वाणिज्य बैंक (RBB) र कृषि विकास बैंक (ADBL) का तह ३, ४ र ५ सहायक तथा अधिकृत पदका लागि पूर्ण वस्तुगत ५० प्रश्न अभ्यास सेटहरू। नेगेटिभ मार्किङ (-०.४) सहित वास्तविक परीक्षा ढाँचा।',
+        targetPill: 'NRB • NBL • RBB • ADBL',
+        activeColor: 'emerald'
+      };
+    }
+    if (quizSubCategory === 'loksewa') {
+      return {
+        title: 'निजामती / लोकसेवा तयारी (Loksewa Exam Preparation)',
+        englishTitle: 'PSC Civil Service Pre-Test & General Knowledge',
+        badge: 'लोक सेवा आयोग (PSC) प्रथम पत्र',
+        badgeBg: 'bg-amber-600',
+        gradient: 'from-amber-700 via-orange-900 to-slate-900 border-amber-500/30 shadow-amber-950/20',
+        icon: Scale,
+        description: 'नेपाल सरकार निजामती सेवाका शाखा अधिकृत (Section Officer), नायब सुब्बा (Nayab Subba), खरिदार र स्थानीय तहका लागि सामान्य ज्ञान, ऐन-कानुन, नेपालको संविधान, सुशासन र आइक्यु/गणितका ५० वस्तुगत प्रश्न सेटहरू।',
+        targetPill: 'शाखा अधिकृत • नायब सुब्बा • खरिदार',
+        activeColor: 'amber'
+      };
+    }
+    return {
+      title: 'संगठित संस्था (Public Enterprises & PPP)',
+      englishTitle: 'Public Enterprises & PPP Competitive Exam Pre-Test',
+      badge: 'आधिकारिक ५० पूर्ण सेट इन्जिन',
+      badgeBg: 'bg-[#DC2626]',
+      gradient: 'from-blue-700 via-blue-800 to-indigo-900 border-blue-500/30 shadow-blue-950/20',
+      icon: Building2,
+      description: 'नेपाल राष्ट्र बैंक, कर्मचारी सञ्चय कोष, नागरिक लगानी कोष, नेपाल टेलिकम, नेपाल विद्युत प्राधिकरण लगायत सबै सार्वजनिक संस्थानहरूका लागि अनिवार्य Pre-Test (प्रथम पत्र) का पूर्ण ५० नमुना सेटहरू। प्रति सेट ४५ द्विभाषी (Bilingual), ३ अङ्ग्रेजी र २ नेपाली प्रश्नहरू सहित आधिकारिक परीक्षा नियम अनुसार स्वचालित काउन्टडाउन र नेगेटिभ मार्किङ (-०.४)।',
+      targetPill: 'तह ४ (२० अङ्क) • तह ५ (१० अङ्क)',
+      activeColor: 'blue'
+    };
+  }, [quizSubCategory]);
+
+  const HeaderIcon = subCategoryConfig.icon;
+
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
+
+      {/* TOP SUB-CATEGORY SWITCHER: संगठित संस्था, बैंकिङ्ग, लोकसेवा */}
+      <div 
+        id="screen-subcategory-nav"
+        className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-1.5 bg-slate-100/90 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xs"
+      >
+        {/* 1. संगठित संस्था Pre-Test */}
+        <button
+          type="button"
+          id="screen-cat-btn-sangathit"
+          onClick={() => selectQuizSubCategory('sangathit')}
+          className={`p-3 rounded-xl flex items-center justify-between text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            quizSubCategory === 'sangathit'
+              ? 'bg-[#0B2046] text-white shadow-md'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700/60'
+          }`}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Building2 className={`w-4 h-4 shrink-0 ${quizSubCategory === 'sangathit' ? 'text-red-400' : 'text-blue-600'}`} />
+            <div className="text-left truncate">
+              <p className="truncate font-black">१. संगठित संस्था Pre-Test</p>
+              <p className="text-[10px] opacity-80 font-normal">Public Enterprises Pre-Test</p>
+            </div>
+          </div>
+          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-red-600 text-white shrink-0">५० सेट</span>
+        </button>
+
+        {/* 2. बैंकिङ्ग परीक्षा तयारी */}
+        <button
+          type="button"
+          id="screen-cat-btn-banking"
+          onClick={() => selectQuizSubCategory('banking')}
+          className={`p-3 rounded-xl flex items-center justify-between text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            quizSubCategory === 'banking'
+              ? 'bg-emerald-700 text-white shadow-md'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700/60'
+          }`}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Landmark className={`w-4 h-4 shrink-0 ${quizSubCategory === 'banking' ? 'text-emerald-300' : 'text-emerald-600'}`} />
+            <div className="text-left truncate">
+              <p className="truncate font-black">२. बैंकिङ्ग परीक्षा तयारी</p>
+              <p className="text-[10px] opacity-80 font-normal">NRB • NBL • RBB • ADBL</p>
+            </div>
+          </div>
+          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-600 text-white shrink-0">४ बैंक</span>
+        </button>
+
+        {/* 3. निजामती/लोकसेवा तयारी */}
+        <button
+          type="button"
+          id="screen-cat-btn-loksewa"
+          onClick={() => selectQuizSubCategory('loksewa')}
+          className={`p-3 rounded-xl flex items-center justify-between text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            quizSubCategory === 'loksewa'
+              ? 'bg-amber-700 text-white shadow-md'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700/60'
+          }`}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Scale className={`w-4 h-4 shrink-0 ${quizSubCategory === 'loksewa' ? 'text-amber-300' : 'text-amber-600'}`} />
+            <div className="text-left truncate">
+              <p className="truncate font-black">३. निजामती/लोकसेवा तयारी</p>
+              <p className="text-[10px] opacity-80 font-normal">अधिकृत • नासु • खरिदार</p>
+            </div>
+          </div>
+          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-600 text-white shrink-0">PSC</span>
+        </button>
+      </div>
       
-      {/* Hero Banner: Public Enterprises & PPP 50 Full Sets Pre-Test Engine */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 border border-blue-500/30 text-white p-6 sm:p-8 shadow-xl shadow-blue-950/20">
+      {/* Dynamic Hero Banner for active Category */}
+      <div className={`relative overflow-hidden rounded-3xl bg-gradient-to-r ${subCategoryConfig.gradient} text-white p-6 sm:p-8 shadow-xl`}>
         <div className="relative z-10 space-y-4">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-[#DC2626] text-white shadow-sm flex items-center gap-1.5">
+            <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${subCategoryConfig.badgeBg} text-white shadow-sm flex items-center gap-1.5`}>
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>आधिकारिक ५० पूर्ण सेट इन्जिन</span>
+              <span>{subCategoryConfig.badge}</span>
             </span>
             <span className="px-3 py-1 rounded-full text-xs font-bold bg-white/15 text-white border border-white/25">
-              तह ४ (२० अङ्क) • तह ५ (१० अङ्क)
+              {subCategoryConfig.targetPill}
             </span>
             <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/30 text-emerald-200 border border-emerald-400/30">
               २,५०० वस्तुगत प्रश्नहरू
@@ -181,20 +336,20 @@ export const PublicEnterprisesScreen: React.FC = () => {
             <div className="space-y-2 max-w-3xl">
               <div className="flex items-center gap-3">
                 <div className="p-3 rounded-2xl bg-white/15 backdrop-blur-md border border-white/30 text-white shadow-inner shrink-0">
-                  <Building2 className="w-8 h-8 text-white" />
+                  <HeaderIcon className="w-8 h-8 text-white" />
                 </div>
                 <div>
                   <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-                    संगठित संस्था (Public Enterprises & PPP)
+                    {subCategoryConfig.title}
                   </h1>
                   <p className="text-sm font-semibold text-blue-200">
-                    ५० पूर्ण सेट Pre-Test परीक्षा इन्जिन • लोक सेवा आयोग आधिकारिक पाठ्यक्रम ढाँचा
+                    {subCategoryConfig.englishTitle} • लोक सेवा आयोग आधिकारिक पाठ्यक्रम ढाँचा
                   </p>
                 </div>
               </div>
 
               <p className="text-xs sm:text-sm text-blue-100 leading-relaxed pt-1">
-                नेपाल राष्ट्र बैंक, कर्मचारी सञ्चय कोष, नागरिक लगानी कोष, नेपाल टेलिकम, नेपाल विद्युत प्राधिकरण लगायत सबै सार्वजनिक संस्थानहरूका लागि अनिवार्य Pre-Test (प्रथम पत्र) का पूर्ण ५० नमुना सेटहरू। प्रति सेट ४५ द्विभाषी (Bilingual), ३ अङ्ग्रेजी र २ नेपाली प्रश्नहरू सहित आधिकारिक परीक्षा नियम अनुसार स्वचालित काउन्टडाउन र नेगेटिभ मार्किङ (-०.४)।
+                {subCategoryConfig.description}
               </p>
             </div>
 
@@ -314,6 +469,64 @@ export const PublicEnterprisesScreen: React.FC = () => {
               </div>
             </div>
 
+            {/* Sub-Category Specific Filter Chips (Banking Institutes or Loksewa Levels) */}
+            {quizSubCategory === 'banking' && (
+              <div className="flex items-center gap-2 overflow-x-auto pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+                <span className="font-bold text-slate-500 dark:text-slate-400 shrink-0 flex items-center gap-1.5">
+                  <Landmark className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>बैंक छनोट:</span>
+                </span>
+                {[
+                  { id: 'ALL', label: 'सबै बैंकिङ्ग (All Banks)' },
+                  { id: 'NRB', label: 'नेपाल राष्ट्र बैंक (NRB)' },
+                  { id: 'RBB', label: 'राष्ट्रिय वाणिज्य बैंक (RBB)' },
+                  { id: 'NBL', label: 'नेपाल बैंक लिमिटेड (NBL)' },
+                  { id: 'ADBL', label: 'कृषि विकास बैंक (ADBL)' }
+                ].map((bank) => (
+                  <button
+                    key={bank.id}
+                    type="button"
+                    onClick={() => setBankingInstituteFilter(bank.id as any)}
+                    className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer whitespace-nowrap ${
+                      bankingInstituteFilter === bank.id
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-emerald-50 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {bank.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {quizSubCategory === 'loksewa' && (
+              <div className="flex items-center gap-2 overflow-x-auto pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+                <span className="font-bold text-slate-500 dark:text-slate-400 shrink-0 flex items-center gap-1.5">
+                  <Scale className="w-3.5 h-3.5 text-amber-600" />
+                  <span>तह छनोट:</span>
+                </span>
+                {[
+                  { id: 'ALL', label: 'सबै लोकसेवा (All PSC)' },
+                  { id: 'OFFICER', label: 'शाखा अधिकृत (Section Officer)' },
+                  { id: 'NASU', label: 'नायब सुब्बा (Nayab Subba)' },
+                  { id: 'KHARIDAR', label: 'खरिदार (Kharidar)' }
+                ].map((tier) => (
+                  <button
+                    key={tier.id}
+                    type="button"
+                    onClick={() => setLoksewaTierFilter(tier.id as any)}
+                    className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer whitespace-nowrap ${
+                      loksewaTierFilter === tier.id
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-amber-50 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {tier.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Quick Set Range Pills */}
             <div className="flex items-center gap-2 overflow-x-auto pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
               <span className="font-bold text-slate-400 shrink-0">द्रुत छनोट:</span>
@@ -352,21 +565,43 @@ export const PublicEnterprisesScreen: React.FC = () => {
               const isMedium = set.setNumber > 15 && set.setNumber <= 35;
               const isHard = set.setNumber > 35;
 
+              const isBanking = quizSubCategory === 'banking';
+              const isLoksewa = quizSubCategory === 'loksewa';
+
+              const cardTitle = isBanking && set.bankingExamName 
+                ? set.bankingExamName 
+                : isLoksewa && set.loksewaExamName 
+                  ? set.loksewaExamName 
+                  : set.nepaliTitle;
+
               return (
                 <div
                   key={set.id}
                   className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200 dark:border-slate-800 hover:border-blue-500/60 dark:hover:border-blue-500/50 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group"
                 >
                   <div className="space-y-3">
-                    {/* Header line with Set Number Badge and Difficulty */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2.5 py-1 rounded-xl bg-blue-600 text-white font-mono font-black text-xs shadow-xs">
+                    {/* Header line with Set Number Badge, Category/Institute Badge and Difficulty */}
+                    <div className="flex items-center justify-between gap-1 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`px-2.5 py-1 rounded-xl text-white font-mono font-black text-xs shadow-xs ${
+                          isBanking ? 'bg-emerald-600' : isLoksewa ? 'bg-amber-600' : 'bg-blue-600'
+                        }`}>
                           सेट {set.setNumber}
                         </span>
-                        <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-400">
-                          {set.targetLevel}
-                        </span>
+
+                        {isBanking ? (
+                          <span className="px-2 py-0.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 text-[11px] font-bold">
+                            {set.instituteTag === 'NRB' ? 'राष्ट्र बैंक (NRB)' : set.instituteTag === 'RBB' ? 'रा.वा. बैंक (RBB)' : set.instituteTag === 'NBL' ? 'नेपाल बैंक (NBL)' : 'कृषि बैंक (ADBL)'}
+                          </span>
+                        ) : isLoksewa ? (
+                          <span className="px-2 py-0.5 rounded-lg bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 text-[11px] font-bold">
+                            {set.setNumber % 3 === 1 ? 'शाखा अधिकृत' : set.setNumber % 3 === 2 ? 'नायब सुब्बा' : 'खरिदार'}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                            {set.targetLevel}
+                          </span>
+                        )}
                       </div>
 
                       <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
@@ -383,7 +618,7 @@ export const PublicEnterprisesScreen: React.FC = () => {
                     {/* Title */}
                     <div>
                       <h3 className="font-black text-base text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1">
-                        {set.nepaliTitle}
+                        {cardTitle}
                       </h3>
                       <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mt-1 leading-relaxed">
                         {set.description}
@@ -418,10 +653,18 @@ export const PublicEnterprisesScreen: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleLaunchSet(set.setNumber)}
-                      className="w-full py-3 rounded-2xl bg-slate-900 hover:bg-[#DC2626] dark:bg-slate-800 dark:hover:bg-[#DC2626] text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition-all active:scale-95 cursor-pointer group-hover:bg-[#DC2626]"
+                      className={`w-full py-3 rounded-2xl text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition-all active:scale-95 cursor-pointer ${
+                        isBanking
+                          ? 'bg-slate-900 dark:bg-slate-800 hover:bg-emerald-600 dark:hover:bg-emerald-600 group-hover:bg-emerald-600'
+                          : isLoksewa
+                            ? 'bg-slate-900 dark:bg-slate-800 hover:bg-amber-600 dark:hover:bg-amber-600 group-hover:bg-amber-600'
+                            : 'bg-slate-900 dark:bg-slate-800 hover:bg-[#DC2626] dark:hover:bg-[#DC2626] group-hover:bg-[#DC2626]'
+                      }`}
                     >
                       <Play className="w-4 h-4 fill-white" />
-                      <span>सेट सुरु गर्नुहोस् (Start Pre-Test)</span>
+                      <span>
+                        {isBanking ? 'सेट सुरु गर्नुहोस् (Start Banking Set)' : isLoksewa ? 'सेट सुरु गर्नुहोस् (Start Loksewa Set)' : 'सेट सुरु गर्नुहोस् (Start Pre-Test)'}
+                      </span>
                     </button>
                   </div>
                 </div>

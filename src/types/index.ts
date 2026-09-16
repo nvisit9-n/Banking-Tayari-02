@@ -12,6 +12,8 @@ export type NavigationTab =
   | 'video-lectures'
   | 'about';
 
+export type QuizSubCategory = 'sangathit' | 'banking' | 'loksewa';
+
 export type SubjectCategory = 
   | 'Banking'
   | 'Loksewa'
