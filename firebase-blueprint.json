@@ -1,0 +1,27 @@
+{
+  "entities": {
+    "users": {
+      "fields": {
+        "id": { "type": "string", "description": "User ID (matches auth.uid)" },
+        "name": { "type": "string", "description": "Full name" },
+        "email": { "type": "string", "description": "Email address" },
+        "provider": { "type": "string", "description": "google or password" },
+        "photoURL": { "type": "string", "description": "Avatar URL" },
+        "role": { "type": "string", "description": "student or admin" },
+        "xp": { "type": "number", "description": "Total XP earned" },
+        "totalLogins": { "type": "number", "description": "Login count" },
+        "quizzesAttempted": { "type": "number", "description": "Quizzes attempted" },
+        "lastLoginAt": { "type": "string", "description": "ISO timestamp of last login" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of account creation" }
+      }
+    },
+    "analytics": {
+      "fields": {
+        "id": { "type": "string", "description": "Daily date or global metric key" },
+        "pageViews": { "type": "number", "description": "Count of page views" },
+        "activeUsers": { "type": "number", "description": "Count of active users" },
+        "lastUpdated": { "type": "string", "description": "ISO timestamp" }
+      }
+    }
+  }
+}
